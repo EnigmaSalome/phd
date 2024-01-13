@@ -9,6 +9,9 @@ BiocManager::install("renv")
 # Initialize
 renv::init()
 
-
+# Install some packages
+renv::install("harmony")
+renv::install("SCpubr")
+renv::install(c("ggplotify", "viridis", "assertthat"))
 
 
