@@ -1,5 +1,5 @@
 ---
-title: "Chapter X - R Notebook"
+title: "Chapter 2 - R Notebook"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -9,6 +9,12 @@ output:
     number_sections: true
 
 ---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
 
 
 # IMPORT
@@ -20,13 +26,12 @@ library(cowplot)
 library(tidyverse)
 library(dplyr)
 library(Seurat)
+library(harmony)
+library(SCpubr)
 ```
 
 ## Import data
 ```{r import-data}
-setwd("~/Projects/phd/")
-source("./scripts/colors_universal.R")
-
 seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
 DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
 ```
@@ -34,74 +39,40 @@ DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
 
 
 
-# FUNCTIONS
-```{r define-functions}
+# FIGURE 2: integrated data by tissue
+Show the cells colored by tissue. Split by tissue to show overlap.
+```{r fig2, fig.width=5, fig.height=5}
+# order thymus first
+seur_integrated@meta.data$tissue <- factor(seur_integrated@meta.data$tissue, levels=c("Thymus", "PBMC"))
 
+do_DimPlot(
+  seur_integrated,
+  group.by="tissue",
+  split.by="tissue",
+  colors.use=cols_tissue,
+  shuffle=T,
+  order=NULL,
+  pt.size=4,
+  border.size=2,
+  raster=T,
+  raster.dpi = 2048
+  )
+ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig2_bis.jpeg", width=12, height=5)
 ```
 
 
 
 
-# ANALYSIS
-
-## Separate conventional T thymocytes
-```{r analysis-1}
-# subset data
-seur_thymus_tconv <- subset(seur_integrated, subset= tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus"))
-print(seur_thymus_tconv) # 27,203 cells
-table(seur_thymus_tconv$batch_id, useNA="ifany")
-
-# remove dimred
-seur_thymus_tconv@reductions$pca <- NULL
-seur_thymus_tconv@reductions$initial_umap <- NULL
-seur_thymus_tconv@reductions$harmony <- NULL
-seur_thymus_tconv@reductions$umap_integrated <- NULL
-```
+# FIGURE 3
 
 
-## Integrate data (from 4 batches)
-```{r analysis-2}
-seur_thymus_tconv <- FindVariableFeatures(seur_thymus_tconv, selection.method="vst", nfeatures=2000)
-seur_thymus_tconv <- RunPCA(seur_thymus_tconv, npcs=50, verbose=T)
-ElbowPlot(seur_thymus_tconv, ndims=50, reduction="pca")
-DimPlot(seur_thymus_tconv, reduction="pca", group.by=c("batch_id", "sequencing_method"))
 
-seur_thymus_tconv <- RunHarmony(
-  seur_thymus_tconv,
-  reduction = "pca",
-  max.iter.harmony=30,
-  group.by.vars = c("batch_id", "sequencing_method")
-  ) # converged in 13 iterations
-DimPlot(seur.thymus, reduction="pca", group.by="Batch") | DimPlot(seur.thymus, reduction="harmony", group.by="Batch")
-DimPlot(seur.thymus, reduction="pca", group.by="Method") | DimPlot(seur.thymus, reduction="harmony", group.by="Method")
-DimPlot(seur.thymus, reduction="pca", group.by="Sex") | DimPlot(seur.thymus, reduction="harmony", group.by="Sex")
-
-ElbowPlot(seur.thymus, ndims=50, reduction="harmony")
-seur.thymus <- RunUMAP(seur.thymus, reduction = "harmony", dims = 1:20, n.neighbors=50)
-seur.thymus <- FindNeighbors(seur.thymus, reduction = "harmony", dims = 1:20, k.param=50)
-seur.thymus <- FindClusters(seur.thymus, resolution = 0.2)
-```
-
-## Analysis 1
-```{r analysis-1}
-
-```
-
-
-## Analysis 2
-```{r analysis-2}
-
-```
-
-## Analysis 3
-```{r analysis-3}
-
-```
-
-
-## Analysis 4
-```{r analysis-4}
-
+```{r, fig.width=10, fig.height=3}
+# CD4 and CD8 expression
+FeaturePlot(seur_thymus_tconv, features=c("CD4", "CD8A"), blend=T, cols = c("lightgrey", "darkred", "darkblue"), order=F)
+FeaturePlot(seur_thymus_tconv, features=c("ZBTB7B", "RUNX3"), blend=T, cols = c("lightgrey", "darkred", "darkblue"), order=T)
+FeaturePlot(seur_thymus_tconv, features=c("CCR9", "CCR7"), blend=T, cols = c("lightgrey", "darkred", "darkblue"), order=T)
+FeaturePlot(seur_thymus_tconv, features=c("CDK1", "RAG1"), blend=T, cols = c("lightgrey", "darkred", "darkblue"), order=T)
 ```
 
 
