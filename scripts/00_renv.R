@@ -13,5 +13,5 @@ renv::init()
 renv::install("harmony")
 renv::install("SCpubr")
 renv::install(c("ggplotify", "viridis", "assertthat"))
-
-
+renv::install("ggrastr")
+renv::install("bioc::Nebulosa")
