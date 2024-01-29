@@ -1,0 +1,322 @@
+---
+title: "Chapter 2 - Figure 7"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(cowplot)
+library(RColorBrewer)
+library(reshape2)
+library(ggrepel)
+library(ComplexHeatmap)
+
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+# library(harmony)
+# library(SCpubr)
+library(MetaNeighbor)
+library(SummarizedExperiment)
+library(gplots)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_mtn_heatmap <- function(mtn_matrix, vector_groups_with_min_cells, df_annotation, df_nbcells){
+  
+  # keep only groups that have at least 100 cells
+  cat("Metaneighbor matrix dimensions:", dim(mtn_matrix), "\n") # 88 rows & columns
+  mtn_sub <- mtn_matrix[rownames(mtn_matrix) %in% vector_groups_with_min_cells, colnames(mtn_matrix) %in% vector_groups_with_min_cells]
+  cat("Metaneighbor matrix without groups < 100 cells:", dim(mtn_sub), "\n") # 43 rows and 43 columns
+  
+  # reorder rows & columns by cluster
+  groups_order_rows <- df_annotation[rownames(mtn_sub),] %>% arrange(clusters_integrated_data, tcell_lineage)
+  groups_order_cols <- df_annotation[colnames(mtn_sub),] %>% arrange(clusters_integrated_data, tcell_lineage)
+  mtn_sub <- mtn_sub[rownames(groups_order_rows), rownames(groups_order_cols)]
+  cat("\nOrder matrix rows:", rownames(mtn_sub), "\n\n")
+  cat("Order matrix columns:", colnames(mtn_sub), "\n\n")
+  
+  # row annotation
+  row_annot <-
+    rowAnnotation(
+      nbcells=anno_barplot(
+        df_nbcells %>% filter(group %in% rownames(mtn_sub)) %>% arrange(match(group, rownames(mtn_sub))) %>% pull(n),
+        axis_param = list(direction = "reverse")
+        ),
+      lineage=df_annotation[rownames(mtn_sub),"tcell_lineage"],
+      cluster=df_annotation[rownames(mtn_sub),"clusters_integrated_data"],
+      col=list(
+        cluster=deframe(df_annotation[rownames(mtn_sub),c("clusters_integrated_data", "col_clusters")]),
+        lineage=deframe(df_annotation[rownames(mtn_sub),c("tcell_lineage", "col_lineages")])
+        )
+      )
+  
+  # column annotation
+  col_annot <-
+    HeatmapAnnotation(
+      nbcells=anno_barplot(
+        df_nbcells %>% filter(group %in% colnames(mtn_sub)) %>% arrange(match(group, colnames(mtn_sub))) %>% pull(n)
+        ),
+      lineage=df_annotation[colnames(mtn_sub),"tcell_lineage"],
+      cluster=df_annotation[colnames(mtn_sub),"clusters_integrated_data"],
+      col=list(
+        cluster=deframe(df_annotation[colnames(mtn_sub),c("clusters_integrated_data", "col_clusters")]),
+        lineage=deframe(df_annotation[colnames(mtn_sub),c("tcell_lineage", "col_lineages")])
+        )
+      )
+  
+  # heatmap
+  Heatmap(
+    mtn_sub,
+    name="auroc",
+    # cluster
+    cluster_rows=F,
+    cluster_columns = F,
+    top_annotation=col_annot,
+    left_annotation=row_annot,
+    # add values
+    layer_fun = function(j, i, x, y, width, height, fill) {
+          v = pindex(mtn_sub, i, j)
+          l = v > 0.9 | v < 0.1
+          grid.text(sprintf("%.2f", v[l]), x[l], y[l], gp = gpar(fontsize = 10))
+          }
+    )
+}
+```
+
+
+
+
+# METANEIGHBOR BY CLUSTER
+
+## Prepare data
+```{r mtn_prepare_data}
+# subset to thymocytes only
+seur_thym <- subset(seur_integrated, subset=tissue=="Thymus")
+print(seur_thym)
+
+# get count matrix
+se_thym <- SummarizedExperiment(
+  assays=seur_thym@assays[["RNA"]]@counts,
+  colData=seur_thym@meta.data[,c("tcell_lineage", "donor_id", "clusters_integrated_data")]
+  )
+```
+
+
+## Run metaneighbor
+```{r run_mtn}
+mtn <- MetaNeighborUS(
+  var_genes=VariableFeatures(seur_thym),
+  dat=se_thym,
+  study_id=se_thym$tcell_lineage,
+  cell_type=se_thym$clusters_integrated_data,
+  fast_version=T
+  )
+```
+
+```{r plot_mtn_fullheatmap, fig.width=14, fig.height=14}
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          keysize = 1.2,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9))
+```
+
+
+## Plot metaneighbor full heatmap
+First, let's obtain the number of cells per group (we are not interested in groups that contain less than 100 cells, it's less reliable).
+```{r prepare_data_heatmaps}
+# Get number of cells per lineage and cluster
+nbcells <- seur_thym@meta.data %>%
+  as_tibble() %>%
+  group_by(tcell_lineage, clusters_integrated_data) %>%
+  dplyr::count() %>%
+  ungroup() %>%
+  mutate(group=paste(tcell_lineage, clusters_integrated_data, sep="|")) %>%
+  select(group, n)
+groups_with_min_cells <- nbcells %>% filter(n>=100) %>% pull(group)
+
+# general dataframe for annotation
+df_annot <- data.frame("names"=nbcells$group) %>%
+  separate(names, c("tcell_lineage", "clusters_integrated_data"), remove=F) %>%
+  left_join(enframe(cols_integrated) %>% dplyr::rename(col_clusters=value), by=join_by(clusters_integrated_data==name)) %>%
+  left_join(enframe(cols_lineages) %>% dplyr::rename(col_lineages=value), by=join_by(tcell_lineage==name)) %>%
+  mutate(clusters_integrated_data=factor(clusters_integrated_data, levels=0:17)) %>%
+  column_to_rownames("names")
+```
+
+Then, we can plot the heatmap (full heatmap).
+```{r heatmap_full, fig.width=12, fig.height=12}
+pdf("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig7_mtn_clusters_integrated.pdf", width=17, height=15)
+plot_mtn_heatmap(mtn_matrix=mtn, vector_groups_with_min_cells = groups_with_min_cells, df_annotation = df_annot, df_nbcells=nbcells)
+dev.off()
+```
+
+
+## Plot metaneighbor Tconv vs Tinn
+Plot metaneighbor result in a more readable format to compare Tconv vs Tinn.
+```{r heatmap_tconv_tinn, fig.width=8, fig.height=8}
+mtn_conv_inn <- mtn[str_detect(rownames(mtn),"CD4|CD8"),str_detect(colnames(mtn),"iNKT|MAIT|GD")]
+
+plot_mtn_heatmap(mtn_matrix=mtn_conv_inn, vector_groups_with_min_cells = groups_with_min_cells, df_annotation = df_annot)
+```
+
+
+
+
+# METANEIGHBOR BY "BRANCH"
+
+## Prepare data
+```{r mtn_branches_prepare_data}
+print(seur_thym)
+
+# create a new metadata column for "branches"
+seur_thym@meta.data
+seur_thym@meta.data$clusters_branch <- dplyr::case_when(
+  seur_thym@meta.data$clusters_integrated_data %in% c(0,1,2) ~ "pre-selection",
+  seur_thym@meta.data$clusters_integrated_data %in% c(3,11)  ~ "CD4 branch",
+  seur_thym@meta.data$clusters_integrated_data %in% c(9,10)  ~ "CD8 branch",
+  seur_thym@meta.data$clusters_integrated_data %in% c(4,5,7) ~ "agonist branch",
+  seur_thym@meta.data$clusters_integrated_data == 6          ~ "GD branch",
+  seur_thym@meta.data$clusters_integrated_data == 8          ~ "IFN signaling",
+  seur_thym@meta.data$clusters_integrated_data %in% c(12:17) ~ "effector",
+  .default = NA
+)
+table(seur_thym@meta.data[,c("clusters_integrated_data", "clusters_branch")], useNA="ifany") # sanity check
+
+
+# get count matrix
+se_thym2 <- SummarizedExperiment(
+  assays=seur_thym@assays[["RNA"]]@counts,
+  colData=seur_thym@meta.data[,c("tcell_lineage", "donor_id", "clusters_branch")]
+  )
+```
+
+
+## Run metaneighbor
+```{r run_mtn_branches}
+mtn2 <- MetaNeighborUS(
+  var_genes=VariableFeatures(seur_thym),
+  dat=se_thym2,
+  study_id=se_thym2$donor_id,
+  cell_type=se_thym2$tcell_lineage,
+  fast_version=T
+  )
+```
+
+```{r plot_mtn_branches_fullheatmap, fig.width=14, fig.height=14}
+heatmap.2(mtn2,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          keysize = 1.2,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9))
+```
+
+## Plot metaneighbor full heatmap
+First, let's obtain the number of cells per group (we are not interested in groups that contain less than 100 cells, it's less reliable).
+```{r prepare_data_heatmaps_branches}
+# Get number of cells per lineage and cluster
+nbcells2 <- seur_thym@meta.data %>%
+  as_tibble() %>%
+  group_by(tcell_lineage, clusters_branch) %>%
+  dplyr::count() %>%
+  ungroup() %>%
+  mutate(group=paste(tcell_lineage, clusters_branch, sep="|")) %>%
+  select(group, n)
+groups_with_min_cells2 <- nbcells2 %>% filter(n>=100) %>% pull(group)
+
+# general dataframe for annotation
+df_annot2 <- data.frame("names"=nbcells2$group) %>%
+  separate(names, c("tcell_lineage", "clusters_branch"), sep="\\|", remove=F) %>%
+  mutate(col_clusters=case_when(
+    clusters_branch=="pre-selection" ~"#f4c40f",
+    clusters_branch=="CD4 branch"    ~"#e09351",
+    clusters_branch=="CD8 branch"    ~"#5a97c1",
+    clusters_branch=="agonist branch"~"#2b9b81",
+    clusters_branch=="GD branch"     ~"#92c051",
+    clusters_branch=="IFN signaling" ~"#17154f",
+    clusters_branch=="effector"      ~"#a40000"
+  )) %>%
+  left_join(enframe(cols_lineages) %>% dplyr::rename(col_lineages=value), by=join_by(tcell_lineage==name)) %>%
+  mutate(clusters_branch=factor(clusters_branch, levels=c("pre-selection", "GD branch", "agonist branch", "CD4 branch", "CD8 branch", "IFN signaling", "effector"))) %>%
+  column_to_rownames("names") %>%
+  # for the function
+  dplyr::rename(clusters_integrated_data=clusters_branch)
+
+```
+
+Then, we can plot the heatmap (full heatmap).
+```{r heatmap_full, fig.width=12, fig.height=12}
+plot_mtn_heatmap(mtn_matrix=mtn2, vector_groups_with_min_cells = groups_with_min_cells2, df_annotation = df_annot2, df_nbcells=nbcells2)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
