@@ -1,5 +1,5 @@
 ---
-title: "Chapter 2 - R Notebook"
+title: "Chapter 2 - Figure 2"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -28,6 +28,7 @@ library(dplyr)
 library(Seurat)
 library(harmony)
 library(SCpubr)
+library(patchwork)
 ```
 
 ## Import data
@@ -405,7 +406,6 @@ for(gene in genes_to_plot){
 }
 ```
 
-
 ```{r fig4_parksignatures, fig.width=6, fig.height=5}
 # Get Park et al. gene signatures
 park_markergenes <- read.csv("~/Projects/phd/data/litterature_gene_signatures/park_genesignatures.csv", row.names=1)
@@ -471,8 +471,59 @@ do_DimPlot(
 # ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_clusters_by_tissue.jpeg", width=18, height=6)
 ```
 
-```{r fig5_markergenes}
-# For now, using the figure from paper
+```{r fig5_markergenes, fig.height=10, fig.width=8}
+# Supp Fig 3A, but only on thymocytes
+thymocytes_cellid <- rownames(seur_integrated@meta.data[seur_integrated@meta.data$tissue=="Thymus",])
+length(thymocytes_cellid)
+
+genes_dotplot <- c(
+  "PTCRA", "RAG1", # CD4 ISP
+  "MKI67", "CDK1", # CD4 ISP (P)
+  "CD4", "CD8A", "CD8B", "CD1C", "AQP3", # DP
+  "CCR9", "SATB1", # ab T entry
+  "EGR1", "EGR3", "NR4A1", # Agonist
+  "CD8A", "PDCD1", "GNG4", # CD8aa
+  "TRDC", "TRGC2", # GD
+  "IKZF4", "FOXP3", "CTLA4", "IL2RA", # Treg
+  "STAT1", "IFI6", # IFN sig
+  "CD8B", "RUNX3", "LINC02446", # CD8
+  "CD4", "ZBTB7B", "CD40LG", # CD4
+  "CCR7", "SELL", "S1PR1",  #"IL7R", # Naive / exit
+  "FOS", "JUN", "JUNB", # AP1 signaling
+  "EOMES", "TBX21", "RORA", "RORC", "GZMK", "GZMB", "GNLY", "PRF1", "NKG7", "KLRB1", "IFNG", "CCR6" # Effector
+  )
+
+# DotPlot
+fig5_p1 <- do_DotPlot(
+  sample=seur_integrated[,thymocytes_cellid],
+  features=genes_dotplot,
+  group.by = "clusters_integrated_data",
+  legend.position = "right",
+  use_viridis = T,
+  viridis.palette = "B",
+  flip=T
+  )+
+  # coord_flip()+
+  theme(axis.text.x=element_text(angle=0, hjust=0.5),
+        axis.text.y=element_text(face="italic"))
+
+# Barplot of nb of cells
+fig5_p2 <- seur_integrated@meta.data %>%
+  as_data_frame() %>%
+  filter(tissue=="Thymus") %>%
+  group_by(clusters_integrated_data, tcell_lineage) %>%
+  count() %>%
+  ggplot(aes(x=clusters_integrated_data, y=n, fill=tcell_lineage))+
+  geom_bar(stat="identity")+
+  scale_fill_manual(values=cols_lineages, name="Cell hashing")+
+  scale_y_continuous(expand = c(0, 0))+
+  # scale_x_discrete(position="top")+
+  labs(x="", y="Number of thymocytes")+
+  theme_cowplot()
+
+# Combine
+fig5_p2 / fig5_p1 + plot_layout(heights = c(1, 4))
+# ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_markergenes.pdf", width=8, height=10)
 ```
 
 ```{r fig5_tissue_distribution}
