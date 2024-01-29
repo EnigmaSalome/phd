@@ -1,0 +1,162 @@
+---
+title: "Chapter 2 - Figure 6"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(harmony)
+library(SCpubr)
+library(patchwork)
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+```
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# FIGURE 6
+
+## Highlight clusters by cell hashing on integrated UMAP
+```{r analysis-1}
+# Plot by cell hashing & tissue
+p <- do_DimPlot(
+  seur_integrated,
+  group.by="clusters_integrated_data",
+  split.by="tcell_lineage_tissue",
+  colors.use = cols_integrated,
+  ncol=2,
+  raster=T,
+  raster.dpi=2048,
+  pt.size = 6
+)
+
+# Get only the plots of interest (thymocytes)
+fig6_umapCD4 <- p$patches$plots[[3]]
+fig6_umapCD8 <- p$patches$plots[[5]]
+fig6_umapNKT <- p$patches$plots[[9]]
+fig6_umapMAIT <- p$patches$plots[[11]]
+fig6_umapGDT <- p$patches$plots[[7]]
+```
+
+
+## Barplot cluster composition by cell hashing
+```{r analysis-2}
+pbar <- seur_integrated@meta.data %>%
+  as_tibble() %>%
+  filter(tissue=="Thymus") %>%
+  summarise(nbcells=n(), .by=c(tcell_lineage, clusters_integrated_data, donor_id)) %>%
+  arrange(tcell_lineage, clusters_integrated_data, donor_id) %>%
+  group_by(tcell_lineage, donor_id) %>%
+  mutate(nbcells_per_lineage_donor=sum(nbcells),
+         freq=nbcells*100/nbcells_per_lineage_donor) %>%
+  mutate(clusters_integrated_data=factor(clusters_integrated_data, levels=rev(0:17))) %>%
+  # plot
+  ggplot(aes(x=donor_id, y=freq, fill=clusters_integrated_data))+
+  geom_bar(stat="identity")+
+  facet_wrap(~tcell_lineage)+
+  scale_fill_manual(values=cols_integrated)+
+  labs(x="Donors", y="% cells")+
+  theme_cowplot()+
+  theme(legend.position="none")
+
+fig6_barCD4 <- pbar
+fig6_barCD8 <- pbar
+fig6_barNKT <- pbar
+fig6_barMAIT <- pbar
+fig6_barGDT <- pbar
+
+fig6_barCD4$data <- fig6_barCD4$data %>% filter(tcell_lineage=="CD4")
+fig6_barCD8$data <- fig6_barCD8$data %>% filter(tcell_lineage=="CD8")
+fig6_barNKT$data <- fig6_barNKT$data %>% filter(tcell_lineage=="iNKT")
+fig6_barMAIT$data <- fig6_barMAIT$data %>% filter(tcell_lineage=="MAIT")
+fig6_barGDT$data <- fig6_barGDT$data %>% filter(tcell_lineage=="GD")
+```
+
+Let's get some numbers for the text:
+```{r}
+seur_integrated@meta.data %>%
+  as_tibble() %>%
+  filter(tissue=="Thymus") %>%
+  summarise(nbcells=n(), .by=c(tcell_lineage, clusters_integrated_data, donor_id)) %>%
+  arrange(tcell_lineage, clusters_integrated_data, donor_id) %>%
+  group_by(tcell_lineage, donor_id) %>%
+  mutate(nbcells_per_lineage_donor=sum(nbcells),
+         freq=nbcells*100/nbcells_per_lineage_donor) %>%
+  # get median freq of thymocytes in each cluster (across donors)
+  # arrange(tcell_lineage, clusters_integrated_data, donor_id) %>%
+  group_by(tcell_lineage, clusters_integrated_data) %>%
+  mutate(freq_median=median(freq)) %>%
+  select(tcell_lineage, clusters_integrated_data, freq_median) %>%
+  distinct()
+```
+
+
+
+
+## Representation of different lineages in each cluster
+```{r analysis-2}
+fig6_clustercomp <- seur_integrated@meta.data %>%
+  as_data_frame() %>%
+  filter(tissue=="Thymus") %>%
+  group_by(clusters_integrated_data, tcell_lineage) %>%
+  count() %>%
+  ggplot(aes(x=clusters_integrated_data, y=n, fill=tcell_lineage))+
+  geom_bar(stat="identity", position="fill")+
+  scale_fill_manual(values=cols_lineages, name="Cell hashing")+
+  scale_y_continuous(expand = c(0, 0))+
+  # scale_x_discrete(position="top")+
+  labs(x="Clusters", y="% cells")+
+  theme_cowplot()
+```
+
+
+## Combine UMAPs and barplots
+```{r analysis-1, fig.width=10, fig.height=5}
+# Combine everything
+(fig6_umapCD4 + fig6_barCD4 + fig6_umapCD8 + fig6_barCD8 + fig6_umapGDT + fig6_barGDT + plot_layout(nrow=1)) /
+  (fig6_umapNKT + fig6_barNKT + fig6_umapMAIT + fig6_barMAIT + fig6_clustercomp + plot_layout(nrow=1, widths = c(1,1,1,1,2))) +
+  plot_layout(nrow=2)
+ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/ch2_fig6_clusteroverlap.pdf", width=18, height=8)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
