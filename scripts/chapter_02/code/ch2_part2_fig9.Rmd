@@ -1,0 +1,250 @@
+---
+title: "Chapter 2 - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+library(ggalluvial)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+
+seur_thym <- list(
+  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS"),
+  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS"),
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.mait.RDS"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gd.RDS")
+)
+```
+
+
+
+
+# PREPARE DATA
+Do a bit of cleanup
+```{r}
+# sanity check
+table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data),]) == rownames(seur_thym$mait@meta.data), useNA="ifany"
+)
+
+# add column "clusters per lineage"
+seur_thym$cd4@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$cd4@meta.data), "clusters_per_lineage"]
+seur_thym$cd8@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$cd8@meta.data), "clusters_per_lineage"]
+seur_thym$nkt@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$nkt@meta.data), "clusters_per_lineage"]
+seur_thym$mait@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data), "clusters_per_lineage"]
+seur_thym$gdt@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$gdt@meta.data), "clusters_per_lineage"]
+
+# add column "clusters integrated"
+seur_thym$cd4@meta.data$clusters_integrated_data <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$cd4@meta.data), "clusters_integrated_data"]
+seur_thym$cd8@meta.data$clusters_integrated_data <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$cd8@meta.data), "clusters_integrated_data"]
+seur_thym$nkt@meta.data$clusters_integrated_data <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$nkt@meta.data), "clusters_integrated_data"]
+seur_thym$mait@meta.data$clusters_integrated_data <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data), "clusters_integrated_data"]
+seur_thym$gdt@meta.data$clusters_integrated_data <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$gdt@meta.data), "clusters_integrated_data"]
+```
+
+Define colors
+```{r define-colors}
+cols_cd4 <- brewer.pal(7, "Greens")
+names(cols_cd4) <- sort(unique(seur_thym$cd4$clusters_per_lineage))
+
+cols_cd8 <- brewer.pal(6, "RdPu")
+names(cols_cd8) <- sort(unique(seur_thym$cd8$clusters_per_lineage))
+
+cols_mait <- brewer.pal(7, "Blues")
+names(cols_mait) <- sort(unique(seur_thym$mait$clusters_per_lineage))
+
+cols_nkt <- brewer.pal(7, "Purples")
+names(cols_nkt) <- sort(unique(seur_thym$nkt$clusters_per_lineage))
+
+cols_gdt <- brewer.pal(8, "PuBu")
+names(cols_gdt) <- sort(unique(seur_thym$gdt$clusters_per_lineage))
+```
+
+
+
+
+# PLOT SEURAT OBJECTS
+
+## CD4
+```{r plot_umaps, fig.width=5, fig.height=10}
+theme_perso2 <- theme(
+  legend.text = element_text(size=6),
+  legend.key.size = unit(0.08, "in")
+)
+
+(do_DimPlot(
+  seur_thym$cd4,
+  group.by="clusters_per_lineage",
+  colors.use = cols_cd4,
+  legend.position = "right",
+  raster = T,
+  pt.size = 8
+) + theme_perso2) +
+  (do_DimPlot(
+  seur_thym$cd8,
+  group.by="clusters_per_lineage",
+  colors.use = cols_cd8,
+  legend.position = "right",
+  raster = T,
+  pt.size = 8
+)+ theme_perso2) +
+  (do_DimPlot(
+  seur_thym$nkt,
+  group.by="clusters_per_lineage",
+  colors.use = cols_nkt,
+  legend.position = "right",
+  raster = T,
+  pt.size = 8
+)+ theme_perso2) +
+  (do_DimPlot(
+  seur_thym$mait,
+  group.by="clusters_per_lineage",
+  colors.use = cols_mait,
+  legend.position = "right",
+  raster = T,
+  pt.size = 8
+)+ theme_perso2) +
+  (do_DimPlot(
+  seur_thym$gdt,
+  group.by="clusters_per_lineage",
+  colors.use = cols_gdt,
+  legend.position = "right",
+  raster = T,
+  pt.size = 8
+)+ theme_perso2) + plot_layout(ncol=1)
+
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig9_umaps.pdf", width=3, height=8, units="in")
+```
+
+
+## Correspondance between clusters per lineage and integrated clusters
+```{r analysis-2, fig.height=5, fig.width=10}
+text_stratum_size <- 4/.pt
+
+p_cd4 <- seur_thym$cd4@meta.data %>%
+  as_tibble() %>%
+  group_by(clusters_integrated_data, clusters_per_lineage) %>%
+  summarise(ncells=n()) %>%
+  ungroup() %>%
+  # plot
+  ggplot(aes(axis1=clusters_per_lineage, axis2=clusters_integrated_data, y=ncells)) +
+  geom_alluvium(aes(fill=clusters_integrated_data))+
+  geom_stratum()+
+  geom_text(stat="stratum", aes(label=after_stat(stratum)), size=text_stratum_size)+
+  scale_fill_manual(values=cols_integrated, name="cell type")+
+  scale_x_continuous(breaks = 1:2, labels = c("Clusters per lineage", "Clusters integrated data"))+
+  theme_cowplot()+
+  # theme_void()+
+  # scale_y_reverse()+
+  theme_perso+
+  theme(legend.position="none")
+
+p_cd8 <- seur_thym$cd8@meta.data %>%
+  as_tibble() %>%
+  group_by(clusters_integrated_data, clusters_per_lineage) %>%
+  summarise(ncells=n()) %>%
+  ungroup() %>%
+  # plot
+  ggplot(aes(axis1=clusters_per_lineage, axis2=clusters_integrated_data, y=ncells)) +
+  geom_alluvium(aes(fill=clusters_integrated_data))+
+  geom_stratum()+
+  geom_text(stat="stratum", aes(label=after_stat(stratum)), size=text_stratum_size)+
+  scale_fill_manual(values=cols_integrated, name="cell type")+
+  scale_x_continuous(breaks = 1:2, labels = c("Clusters per lineage", "Clusters integrated data"))+
+  theme_cowplot()+
+  # theme_void()+
+  # scale_y_reverse()+
+  theme_perso+
+  theme(legend.position="none")
+
+p_nkt <- seur_thym$nkt@meta.data %>%
+  as_tibble() %>%
+  group_by(clusters_integrated_data, clusters_per_lineage) %>%
+  summarise(ncells=n()) %>%
+  ungroup() %>%
+  # plot
+  ggplot(aes(axis1=clusters_per_lineage, axis2=clusters_integrated_data, y=ncells)) +
+  geom_alluvium(aes(fill=clusters_integrated_data))+
+  geom_stratum()+
+  geom_text(stat="stratum", aes(label=after_stat(stratum)), size=text_stratum_size)+
+  scale_fill_manual(values=cols_integrated, name="cell type")+
+  scale_x_continuous(breaks = 1:2, labels = c("Clusters per lineage", "Clusters integrated data"))+
+  theme_cowplot()+
+  # theme_void()+
+  # scale_y_reverse()+
+  theme_perso+
+  theme(legend.position="none")
+
+p_mait <- seur_thym$mait@meta.data %>%
+  as_tibble() %>%
+  group_by(clusters_integrated_data, clusters_per_lineage) %>%
+  summarise(ncells=n()) %>%
+  ungroup() %>%
+  # plot
+  ggplot(aes(axis1=clusters_per_lineage, axis2=clusters_integrated_data, y=ncells)) +
+  geom_alluvium(aes(fill=clusters_integrated_data))+
+  geom_stratum()+
+  geom_text(stat="stratum", aes(label=after_stat(stratum)), size=text_stratum_size)+
+  scale_fill_manual(values=cols_integrated, name="cell type")+
+  scale_x_continuous(breaks = 1:2, labels = c("Clusters per lineage", "Clusters integrated data"))+
+  theme_cowplot()+
+  # theme_void()+
+  # scale_y_reverse()+
+  theme_perso+
+  theme(legend.position="none")
+
+p_gdt <- seur_thym$gdt@meta.data %>%
+  as_tibble() %>%
+  group_by(clusters_integrated_data, clusters_per_lineage) %>%
+  summarise(ncells=n()) %>%
+  ungroup() %>%
+  # plot
+  ggplot(aes(axis1=clusters_per_lineage, axis2=clusters_integrated_data, y=ncells)) +
+  geom_alluvium(aes(fill=clusters_integrated_data))+
+  geom_stratum()+
+  geom_text(stat="stratum", aes(label=after_stat(stratum)), size=text_stratum_size)+
+  scale_fill_manual(values=cols_integrated, name="cell type")+
+  scale_x_continuous(breaks = 1:2, labels = c("Clusters per lineage", "Clusters integrated data"))+
+  theme_cowplot()+
+  # theme_void()+
+  # scale_y_reverse()+
+  theme_perso+
+  theme(legend.position="none")
+
+# combine
+p_cd4 + p_cd8 + p_nkt + p_mait + p_gdt + plot_layout(ncol=1)
+ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig9_ggalluvial.pdf", width=3, height=8, units="in")
+```
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
