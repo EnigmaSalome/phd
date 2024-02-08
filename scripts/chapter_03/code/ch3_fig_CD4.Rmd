@@ -1,0 +1,161 @@
+---
+title: "Chapter 3 - CD4 blood figure"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(cowplot)
+library(gplots)
+library(RColorBrewer)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SummarizedExperiment)
+library(MetaNeighbor)
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+# seur_thym_cd4 <- readRDS("~/Projects/phd/data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS")
+# 
+# seur_pbmc_cd4 <- readRDS("~/Projects/phd/data/seurat_objects/pbmc_objects/blood.CD4_03_16_23.RDS")
+```
+
+Put clusters into CD4 objects
+```{r}
+# # thymus object
+# # colnames(seur_thym_cd4@meta.data)
+# # table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym_cd4@meta.data),])==rownames(seur_thym_cd4@meta.data), useNA="ifany")
+# seur_thym_cd4@meta.data[,13:77] <- NULL
+# seur_thym_cd4@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym_cd4@meta.data), "clusters_per_lineage"]
+# 
+# # pbmc object
+# # colnames(seur_pbmc_cd4@meta.data)
+# # table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_pbmc_cd4@meta.data),])==rownames(seur_pbmc_cd4@meta.data), useNA="ifany")
+# seur_pbmc_cd4@meta.data[,13:41] <- NULL
+# seur_pbmc_cd4@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_pbmc_cd4@meta.data), "clusters_per_lineage"]
+# 
+# # sanity check
+# DimPlot(seur_thym_cd4, reduction="umap", group.by="clusters_per_lineage", cols=cols_thym_cd4)
+# DimPlot(seur_pbmc_cd4, reduction="umap", group.by="clusters_per_lineage")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# ANALYSIS
+
+## Metaneighbor thymocytes x pbmcs
+```{r analysis-1}
+# Get only CD4s
+seur_cd4 <- subset(seur_integrated, subset=tcell_lineage=="CD4")
+table(seur_cd4@meta.data[,c("clusters_per_lineage", "donor_id")], useNA="ifany") # sanity check
+
+# get count matrix
+se_cd4 <- SummarizedExperiment(
+  assays=seur_cd4@assays[["RNA"]]@counts,
+  colData=seur_cd4@meta.data[,c("clusters_per_lineage", "donor_id")]
+  )
+```
+
+```{r run_mtn_branches}
+mtn <- MetaNeighborUS(
+  var_genes=VariableFeatures(seur_integrated),
+  dat=se_cd4,
+  study_id=se_cd4$donor_id,
+  cell_type=se_cd4$clusters_per_lineage,
+  fast_version=T
+  )
+```
+
+```{r plot_mtn_branches_fullheatmap, fig.width=14, fig.height=14}
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          keysize = 1.2,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9))
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
