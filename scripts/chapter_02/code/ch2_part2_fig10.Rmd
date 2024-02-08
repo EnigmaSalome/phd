@@ -1,0 +1,550 @@
+---
+title: "Chapter 2 - Tinn cells and agonist signaling"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+
+seur_thym <- list(
+  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS"),
+  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS"),
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.mait.RDS"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gd.RDS")
+)
+```
+
+
+
+
+# PREPARE DATA
+
+## Clean up data
+Do a bit of cleanup
+```{r}
+# sanity check
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data),]) == rownames(seur_thym$mait@meta.data), useNA="ifany"
+# )
+
+# clean up metadata columns
+# colnames(seur_thym$cd8@meta.data)
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data[,13:77] <- NULL
+    return(x)
+    }
+)
+
+# add column "clusters per lineage"
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
+    return(x)
+    }
+  )
+```
+
+
+## Gene signatures
+```{r gene-signatures}
+# Get Park et al. gene signatures
+park_markergenes <- read.csv("~/Projects/phd/data/litterature_gene_signatures/park_genesignatures.csv", row.names=1)
+park_gene_signatures <- c("DPp", "DPq", "CD8aa1", "CD8aa2", "T_agonist", "abT_entry", "NKT", "CD4T", "CD8T")
+park_gene_signatures_list <- as.list(park_markergenes[,park_gene_signatures])
+names(park_gene_signatures_list) <- paste0("park_", names(park_gene_signatures_list))
+
+# Get Chopp et al. gene signatures
+chopp_signatures <- read.csv("~/Projects/phd/data/litterature_gene_signatures/chopp_gene_signatures.csv")
+chopp_gene_signatures_list <- as.list(chopp_signatures)
+names(chopp_gene_signatures_list) <- paste0("chopp_", names(chopp_gene_signatures_list))
+
+# Personally curated gene signatures from litterature
+perso_gene_signatures <- list(
+  "effector"=c("HOPX", "GZMB", "NKG7", "TBX21", "PRF1", "GZMA", "KLRD1", "EOMES", "CCR6", "RORC", "JUNB", "FOS", "RORA", "FOSB"),
+  "naive"   =c("SATB1", "TCF7", "LEF1", "CCR7", "SELL", "FOXP1", "KLF2", "SOX4", "ID3", "BACH2"),
+  "egress"  =c("KLF2", "CORO1A", "CCR7", "CXCR4", "CXCR6", "FOXO1", "CXCR3", "S1PR1", "S1PR4", "S100A4", "S100A6", "EMP3")
+  )
+
+
+# Combined gene lists
+gene_signatures_list <- c(park_gene_signatures_list, chopp_gene_signatures_list, perso_gene_signatures)
+gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x!=""]) # remove empty genes
+gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x %in% rownames(seur_integrated)]) # remove genes not found in our data
+lapply(gene_signatures_list, function(x) length(x)) # sanity check (between 0-5 genes per signature lost)
+
+
+# add module score to integrated object (better for choice of control genes)
+seur_integrated <- AddModuleScore(
+  object = seur_integrated,
+  assay = "RNA",
+  features = gene_signatures_list,
+  name=names(gene_signatures_list),
+  seed=1
+  )
+colnames(seur_integrated@meta.data)[32:46] <- names(gene_signatures_list)
+
+# little sanity check
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_naive", "naive"))
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_effector", "effector"))
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_egress", "egress"))
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_cd8aa", "park_CD8aa1"))
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("chopp_cd4_signature", "chopp_cd8_signature"), split.by="tissue")
+
+# add scores to all individual thymic seurat objects
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data[,names(gene_signatures_list)] <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), names(gene_signatures_list)]
+    return(x)
+    }
+  )
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+lineage_dimplot <- function(seurobj, col_vector, file_name="no"){
+  p <- do_DimPlot(
+    seurobj,
+    group.by="clusters_per_lineage",
+    colors.use = col_vector,
+    legend.position = "right",
+    # raster = T,
+    # raster.dpi=2048,
+    pt.size = 0.5#,
+    # border.size=1.5
+  )+
+    theme(
+      # axis.title=element_text(size=8),
+      # axis.text=element_text(size=6),
+      legend.key.size = unit(0.4, "cm"),
+      legend.title=element_text(size=8),
+      legend.text = element_text(size=6)
+    )
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/", file_name),
+           plot=p,
+           width=4, height=2.5, units="in")
+  }
+}
+
+lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
+  p <- do_FeaturePlot(
+    seuratobj,
+    features = genesignature,
+    min.cutoff=0,
+    use_viridis = T,
+    viridis.palette = "F",
+    legend.position="right",
+    order=T,
+    pt.size = 1.5,
+    raster=F
+    # raster.dpi=2048,
+    # pt.size=10
+  )
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/", file_name),
+           plot=p,
+           width=7, height=5)
+  }
+}
+
+lineage_nebulosagenes <- function(seuratobj, genes_vector, pgrid_ncol=2, pgrid_size=c(10,30), file_name="no"){
+  
+  pnebulosa <- list()
+  for(gene in genes_vector) {
+    p <- SCpubr::do_NebulosaPlot(seuratobj, features = gene)
+    pnebulosa[[gene]] <- p
+  }
+  pgrid <- plot_grid(plotlist=pnebulosa, ncol=pgrid_ncol)
+  
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/", file_name),
+           plot=pgrid,
+           width=pgrid_size[1], height=pgrid_size[2])
+  }
+}
+
+lineage_dotplot <- function(seuratobj, genes_vector, lines_coord, p_size=c(5,7.5), file_name="no"){
+  p <- do_DotPlot(
+    sample=seuratobj,
+    features=genes_vector,
+    group.by = "clusters_per_lineage",
+    legend.position = "right",
+    use_viridis = T,
+    viridis.palette = "B",
+    legend.title="z-score avg expression",
+    flip=T,
+    scale=T,
+  )+
+    geom_hline(yintercept=lines_coord, linetype="dashed", color="grey")+
+    theme(
+      legend.title=element_text(size=8),
+      legend.text = element_text(size=6),
+      axis.text.x=element_text(size=8, angle=45, hjust=1),
+      axis.text.y=element_text(size=8, face="italic")
+    )
+  
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/", file_name),
+           plot=p,
+           width=p_size[1], height=p_size[2])
+  }
+}
+```
+
+
+
+
+# iNKT FIGURE
+
+## DimPlot
+```{r inkt-umap}
+lineage_dimplot(seurobj = seur_thym$nkt, col_vector = cols_thym_nkt, file_name = "ch2_fig10_inkt_umap.pdf")
+```
+
+
+## DotPlot with marker genes
+```{r inkt-dotplot, fig.width=10, fig.height=7}
+Idents(seur_thym$nkt) <- "clusters_per_lineage"
+inkt_markergenes <- FindAllMarkers(
+  seur_thym$nkt,
+  test.use = 'wilcox',
+  logfc.threshold = 0.4,
+  min.pct = 0.3,
+  only.pos = TRUE
+  )
+inkt_markergenes_list <- inkt_markergenes %>%
+  mutate(cluster=as.character(cluster)) %>%
+  arrange(cluster) %>%
+  filter(p_val_adj<0.05) %>%
+  group_by(cluster) %>%
+  top_n(-5, p_val_adj) %>%
+  # top_n(5, avg_log2FC) %>%
+  ungroup() %>%
+  # filter(avg_log2FC>1.5) %>%
+  pull(gene) %>% unique()
+
+# dotplot
+do_DotPlot(
+  sample=seur_thym$nkt,
+  features=unique(inkt_markergenes_list),
+  group.by = "clusters_per_lineage",
+  legend.position = "right",
+  use_viridis = T,
+  viridis.palette = "B",
+  legend.title="z-score avg expression",
+  # flip=T,
+  scale=T,
+  )+
+  geom_vline(xintercept=c(5.5, 10.5, 15.5, 20.5, 23.5, 29.5), linetype="dashed", color="grey")+
+  theme(
+    legend.title=element_text(size=8),
+    legend.text = element_text(size=6),
+    axis.text.x=element_text(size=8, angle=45, hjust=1, face="italic"),
+    axis.text.y=element_text(size=8)
+    )
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig10_inkt_markergenes.pdf", width=9, height=5)
+```
+
+
+## Gene signatures
+```{r inkt-cd8aa, fig.height=5, fig.width=10}
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "park_CD8aa1", file_name = "ch2_fig10_inkt_cd8aa_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "park_abT_entry", file_name = "ch2_fig10_inkt_SPentry_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "naive", file_name = "ch2_fig10_inkt_naive.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "effector", file_name = "ch2_fig10_inkt_effector.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "egress", file_name = "ch2_fig10_inkt_egress.pdf")
+```
+
+
+## Nebulosa plot highlight CCR9 and CCR7
+```{r inkt-umap-densityplots, fig.height=10, fig.width=10}
+inkt_genes_nebulosa <- c(
+    # "CD4", "CD8A", "CD8B",
+    "EGR2", "ZBTB16",
+    "CCR9", "CCR7",
+    "TBX21", "EOMES",
+    "RORC", "RORA",
+    "GZMK", "PRF1",
+    "KLRB1", "NKG7"
+    )
+
+lineage_nebulosagenes(seuratobj = seur_thym$nkt, genes_vector = inkt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig10_inkt_densityplots.pdf")
+```
+
+
+## iNKT DotPlot genes of interest
+```{r inkt-dotplot-genes-relevant}
+inkt_genes_dotplot <- c(
+  "CD4", "CD8A", "CD8B", 
+  "GNG4", "PDCD1", "TNFRSF9", # CD8aa
+  "HIVEP3", "EGR2", "ZBTB16", # TFs induced in iNKT cells post-selection
+  "CCR9", "LEF1", "ID3", # naive CCR9
+  "CCR7", "SELL", "TCF7", # naive CCR7
+  "S1PR1", "KLF2", # egress
+  "FOS", "JUN", "JUNB", # AP1 signaling
+  "TBX21", "EOMES", "IFNG", "GZMK", # type 1 effector
+  "RORC", "RORA", "CCR6", "IL23R", # type 3 effector
+  "KLRB1"
+)
+
+lineage_dotplot(
+  seuratobj = seur_thym$nkt,
+  genes_vector = inkt_genes_dotplot,
+  lines_coord = c(3.5, 6.5, 9.5, 15.5, 17.5, 20.5),
+  p_size = c(5, 7.5),
+  file_name = "ch2_fig10_inkt_dotplot2.pdf"
+)
+```
+
+
+## test TCR shannon entropy
+```{r}
+tcr_df <- seur_thym$nkt@meta.data %>%
+  
+
+
+TCR_data_NKT_cells_TCRb_diversity_thymus.df <- TCR_data_NKT_cells.df %>%
+  dplyr::filter(TRAV == "TRAV10*01") %>%
+  mutate(TRBV = str_remove(TRBV, pattern = "\\-[^.]*$"),
+         TRBV = str_remove(TRBV, pattern = "\\*[^.]*$"),
+         TRBJ = str_remove(TRBJ, pattern = "\\*[^.]*$")) %>%
+  dplyr::select(-TRAV, -TRAJ, -TRBD, -CDR3a)
+
+TCR_data_NKT_cells_TCRb_diversity_thymus_naive.df <- TCR_data_NKT_cells_TCRb_diversity_thymus.df %>%
+  dplyr::filter(new_clusters_NKT %in% c("1", "2", "3")) %>%
+  mutate(TCRb_d_clonotype = paste(TRBV, TRBJ, CDR3b, sep = "_")) %>%
+  dplyr::select(-new_clusters_NKT) %>% group_by(TCRb_d_clonotype) %>%
+  summarise(n = n()) %>% arrange(desc(n)) %>% pivot_wider(names_from = TCRb_d_clonotype, values_from = n)
+
+shannon_iteration <- function(){
+  TCR_data_NKT_cells_TCRb_diversity_thymus_naive.df %>% 
+    rrarefy(sample = 23) %>% 
+    diversity(index = "shannon")
+}
+
+mean_shannon_thymus_naive <- mean(replicate(100, shannon_iteration()))
+
+TCR_data_NKT_cells_TCRb_diversity_thymus_C5.df <- TCR_data_NKT_cells_TCRb_diversity_thymus.df %>%
+  dplyr::filter(new_clusters_NKT %in% c("5")) %>%
+  mutate(TCRb_d_clonotype = paste(TRBV, TRBJ, CDR3b, sep = "_")) %>%
+  dplyr::select(-new_clusters_NKT) %>% group_by(TCRb_d_clonotype) %>%
+  summarise(n = n()) %>% arrange(desc(n)) %>% pivot_wider(names_from = TCRb_d_clonotype, values_from = n)
+
+shannon_iteration <- function(){
+  TCR_data_NKT_cells_TCRb_diversity_thymus_C5.df %>% 
+    rrarefy(sample = 23) %>% 
+    diversity(index = "shannon")
+}
+
+mean_shannon_thymus_C5 <- mean(replicate(100, shannon_iteration()))
+
+TCR_data_NKT_cells_TCRb_diversity_thymus_C6.df <- TCR_data_NKT_cells_TCRb_diversity_thymus.df %>%
+  dplyr::filter(new_clusters_NKT %in% c("6")) %>%
+  mutate(TCRb_d_clonotype = paste(TRBV, TRBJ, CDR3b, sep = "_")) %>%
+  dplyr::select(-new_clusters_NKT) %>% group_by(TCRb_d_clonotype) %>%
+  summarise(n = n()) %>% arrange(desc(n)) %>% pivot_wider(names_from = TCRb_d_clonotype, values_from = n)
+
+shannon_iteration <- function(){
+  TCR_data_NKT_cells_TCRb_diversity_thymus_C6.df %>% 
+    rrarefy(sample = 23) %>% 
+    diversity(index = "shannon")
+}
+
+mean_shannon_thymus_C6 <- mean(replicate(100, shannon_iteration()))
+```
+
+
+
+
+# MAIT FIGURE
+
+## DimPlot
+```{r mait-umap}
+lineage_dimplot(seurobj = seur_thym$mait, col_vector = cols_thym_mait, file_name = "ch2_fig10_mait_umap.pdf")
+```
+
+## DotPlot with marker genes
+```{r mait-dotplot, fig.width=10, fig.height=7}
+Idents(seur_thym$mait) <- "clusters_per_lineage"
+mait_markergenes <- FindAllMarkers(
+  seur_thym$mait,
+  test.use = 'wilcox',
+  logfc.threshold = 0.4,
+  min.pct = 0.3,
+  only.pos = TRUE
+  )
+mait_markergenes_list <- mait_markergenes %>%
+  mutate(cluster=as.character(cluster)) %>%
+  arrange(cluster) %>%
+  filter(p_val_adj<0.05) %>%
+  filter(!gene %in% grep("RPL|RPS", gene, value=T)) %>%
+  group_by(cluster) %>%
+  top_n(-5, p_val_adj) %>%
+  # top_n(5, avg_log2FC) %>%
+  ungroup() %>%
+  # filter(avg_log2FC>1.5) %>%
+  pull(gene) %>% unique()
+
+# dotplot
+do_DotPlot(
+  sample=seur_thym$mait,
+  features=unique(mait_markergenes_list),
+  group.by = "clusters_per_lineage",
+  legend.position = "right",
+  use_viridis = T,
+  viridis.palette = "B",
+  legend.title="z-score avg expression",
+  # flip=T,
+  scale=T,
+  )+
+  geom_vline(xintercept=c(5.5, 10.5, 15.5, 20.5, 25.5, 30.5), linetype="dashed", color="grey")+
+  theme(
+    legend.title=element_text(size=8),
+    legend.text = element_text(size=6),
+    axis.text.x=element_text(size=8, angle=45, hjust=1, face="italic"),
+    axis.text.y=element_text(size=8)
+    )
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig10_mait_markergenes.pdf", width=10, height=5)
+```
+
+
+## Gene signatures
+```{r mait-gene-signatures, fig.height=5, fig.width=10}
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "park_CD8aa1", file_name = "ch2_fig10_mait_cd8aa_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "park_abT_entry", file_name = "ch2_fig10_mait_SPentry_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "naive", file_name = "ch2_fig10_mait_naive.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "effector", file_name = "ch2_fig10_mait_effector.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "egress", file_name = "ch2_fig10_mait_egress.pdf")
+```
+
+
+## Nebulosa plot highlight CCR9 and CCR7
+```{r mait-umap-densityplots, fig.height=10, fig.width=10}
+lineage_nebulosagenes(seuratobj = seur_thym$mait, genes_vector = inkt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig10_mait_densityplots.pdf")
+```
+
+
+## iNKT DotPlot genes of interest
+```{r inkt-dotplot-genes-relevant}
+# inkt_genes_dotplot <- c(
+#   "CD4", "CD8A", "CD8B", 
+#   "GNG4", "PDCD1", "TNFRSF9", # CD8aa
+#   "HIVEP3", "EGR2", "ZBTB16", # TFs induced in iNKT cells post-selection
+#   "CCR9", "LEF1", "ID3", # naive CCR9
+#   "CCR7", "SELL", "TCF7", # naive CCR7
+#   "S1PR1", "KLF2", # egress
+#   "FOS", "JUN", "JUNB", # AP1 signaling
+#   "TBX21", "EOMES", "IFNG", "GZMK", # type 1 effector
+#   "RORC", "RORA", "CCR6", "IL23R", # type 3 effector
+#   "KLRB1"
+# )
+
+lineage_dotplot(
+  seuratobj = seur_thym$mait,
+  genes_vector = c(inkt_genes_dotplot),
+  lines_coord = c(3.5, 6.5, 9.5, 15.5, 17.5, 20.5),
+  p_size = c(5, 7.5),
+  file_name = "ch2_fig10_mait_dotplot.pdf"
+)
+```
+
+
+
+
+
+
+## Analysis 2
+```{r analysis-2, fig.height=6, fig.width=10}
+Idents(seur_thym$cd8) <- "clusters_per_lineage"
+cd8_markergenes <- FindAllMarkers(
+  seur_thym$cd8,
+  test.use = 'wilcox',
+  logfc.threshold = 0.4,
+  min.pct = 0.3,
+  only.pos = TRUE
+  )
+cd8_markergenes_list <- cd8_markergenes %>%
+  mutate(cluster=as.character(cluster)) %>%
+  arrange(cluster) %>%
+  filter(p_val_adj<0.05) %>%
+  filter(!gene %in% grep("RPL|RPS", gene, value=T)) %>%
+  group_by(cluster) %>%
+  top_n(-5, p_val_adj) %>%
+  # top_n(5, avg_log2FC) %>%
+  ungroup() %>%
+  # filter(avg_log2FC>1.5) %>%
+  pull(gene) %>% unique()
+
+# dotplot
+do_DotPlot(
+  sample=seur_thym$cd8,
+  features=c(unique(cd8_markergenes_list), "CD4"),
+  group.by = "clusters_per_lineage",
+  legend.position = "right",
+  use_viridis = T,
+  viridis.palette = "B",
+  legend.title="z-score avg expression",
+  # flip=T,
+  scale=T,
+  )+
+  geom_vline(xintercept=c(5.5, 10.5, 15.5, 20.5, 25.5, 30.5), linetype="dashed", color="grey")+
+  theme(
+    legend.title=element_text(size=8),
+    legend.text = element_text(size=6),
+    axis.text.x=element_text(size=8, angle=45, hjust=1, face="italic"),
+    axis.text.y=element_text(size=8)
+    )
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
