@@ -1,5 +1,5 @@
 ---
-title: "Chapter 2 - Tinn cells and agonist signaling"
+title: "Chapter 2 - Tinn cells clustering & genes"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -9,6 +9,14 @@ output:
     number_sections: true
 
 ---
+
+This notebook is for figures 10, 13 and 18 in chapter 2.
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
 
 
 # IMPORT
@@ -76,8 +84,8 @@ seur_thym <- lapply(
 ## Gene signatures
 ```{r gene-signatures}
 # Get Park et al. gene signatures
-park_markergenes <- read.csv("~/Projects/phd/data/litterature_gene_signatures/park_genesignatures.csv", row.names=1)
-park_gene_signatures <- c("DPp", "DPq", "CD8aa1", "CD8aa2", "T_agonist", "abT_entry", "NKT", "CD4T", "CD8T")
+park_markergenes <- read.csv("./data/litterature_gene_signatures/park_genesignatures.csv", row.names=1)
+park_gene_signatures <- c("DPp", "DPq", "CD8aa1", "CD8aa2", "gdT", "T_agonist", "abT_entry", "NKT", "CD4T", "CD8T")
 park_gene_signatures_list <- as.list(park_markergenes[,park_gene_signatures])
 names(park_gene_signatures_list) <- paste0("park_", names(park_gene_signatures_list))
 
@@ -90,7 +98,7 @@ names(chopp_gene_signatures_list) <- paste0("chopp_", names(chopp_gene_signature
 perso_gene_signatures <- list(
   "effector"=c("HOPX", "GZMB", "NKG7", "TBX21", "PRF1", "GZMA", "KLRD1", "EOMES", "CCR6", "RORC", "JUNB", "FOS", "RORA", "FOSB"),
   "naive"   =c("SATB1", "TCF7", "LEF1", "CCR7", "SELL", "FOXP1", "KLF2", "SOX4", "ID3", "BACH2"),
-  "egress"  =c("KLF2", "CORO1A", "CCR7", "CXCR4", "CXCR6", "FOXO1", "CXCR3", "S1PR1", "S1PR4", "S100A4", "S100A6", "EMP3")
+  "egress"  =c("KLF2", "CORO1A", "CCR7", "CXCR4", "CXCR6", "FOXO1", "CXCR3", "S1PR1", "S1PR4", "S100A4", "S100A6", "EMP3") # from Sanchez Sanchez
   )
 
 
@@ -109,7 +117,7 @@ seur_integrated <- AddModuleScore(
   name=names(gene_signatures_list),
   seed=1
   )
-colnames(seur_integrated@meta.data)[32:46] <- names(gene_signatures_list)
+colnames(seur_integrated@meta.data)[32:47] <- names(gene_signatures_list)
 
 # little sanity check
 # FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_naive", "naive"))
@@ -456,8 +464,8 @@ lineage_nebulosagenes(seuratobj = seur_thym$mait, genes_vector = inkt_genes_nebu
 ```
 
 
-## iNKT DotPlot genes of interest
-```{r inkt-dotplot-genes-relevant}
+## MAIT DotPlot genes of interest
+```{r mait-dotplot-genes-relevant}
 # inkt_genes_dotplot <- c(
 #   "CD4", "CD8A", "CD8B", 
 #   "GNG4", "PDCD1", "TNFRSF9", # CD8aa
@@ -483,19 +491,24 @@ lineage_dotplot(
 
 
 
+# GD FIGURE
 
+## DimPlot
+```{r gdt-umap}
+lineage_dimplot(seurobj = seur_thym$gdt, col_vector = cols_thym_gdt, file_name = "ch2_fig10_gdt_umap.pdf")
+```
 
-## Analysis 2
-```{r analysis-2, fig.height=6, fig.width=10}
-Idents(seur_thym$cd8) <- "clusters_per_lineage"
-cd8_markergenes <- FindAllMarkers(
-  seur_thym$cd8,
+## DotPlot with marker genes
+```{r gdt-dotplot, fig.width=10, fig.height=7}
+Idents(seur_thym$gdt) <- "clusters_per_lineage"
+gdt_markergenes <- FindAllMarkers(
+  seur_thym$gdt,
   test.use = 'wilcox',
   logfc.threshold = 0.4,
   min.pct = 0.3,
   only.pos = TRUE
   )
-cd8_markergenes_list <- cd8_markergenes %>%
+gdt_markergenes_list <- gdt_markergenes %>%
   mutate(cluster=as.character(cluster)) %>%
   arrange(cluster) %>%
   filter(p_val_adj<0.05) %>%
@@ -509,8 +522,8 @@ cd8_markergenes_list <- cd8_markergenes %>%
 
 # dotplot
 do_DotPlot(
-  sample=seur_thym$cd8,
-  features=c(unique(cd8_markergenes_list), "CD4"),
+  sample=seur_thym$gdt,
+  features=unique(gdt_markergenes_list),
   group.by = "clusters_per_lineage",
   legend.position = "right",
   use_viridis = T,
@@ -519,25 +532,73 @@ do_DotPlot(
   # flip=T,
   scale=T,
   )+
-  geom_vline(xintercept=c(5.5, 10.5, 15.5, 20.5, 25.5, 30.5), linetype="dashed", color="grey")+
+  geom_vline(xintercept=c(5.5, 10.5, 15.5, 20.5, 25.5, 30.5, 35.5), linetype="dashed", color="grey")+
   theme(
     legend.title=element_text(size=8),
     legend.text = element_text(size=6),
     axis.text.x=element_text(size=8, angle=45, hjust=1, face="italic"),
     axis.text.y=element_text(size=8)
     )
-```
-
-## Analysis 3
-```{r analysis-3}
-
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig10_gdt_markergenes.pdf", width=11, height=5)
 ```
 
 
-## Analysis 4
-```{r analysis-4}
-
+## Gene signatures
+```{r gdt-gene-signatures, fig.height=5, fig.width=10}
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_gdT", file_name = "ch2_fig10_gdt_parkGD_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_CD8aa1", file_name = "ch2_fig10_gdt_cd8aa_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_CD8aa2", file_name = "ch2_fig10_gdt_cd8aa2_sig.pdf")
+# lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_abT_entry", file_name = "ch2_fig10_gdt_SPentry_sig.pdf")
+# lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "naive", file_name = "ch2_fig10_gdt_naive.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "effector", file_name = "ch2_fig10_gdt_effector.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "egress", file_name = "ch2_fig10_gdt_egress.pdf")
 ```
+
+
+## Nebulosa plot highlight CCR9 and CCR7
+```{r gdt-umap-densityplots, fig.height=10, fig.width=10}
+gdt_genes_nebulosa <- c(
+  "BCL11B", "GATA3",
+  "EGR1", "ID3",
+  "NT5E", "CD7",
+  "ZBTB16",
+  "TBX21", "RORC",
+  "GZMK", "PRF1",
+  "KLRB1"
+)
+
+lineage_nebulosagenes(seuratobj = seur_thym$gdt, genes_vector = gdt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig10_gdt_densityplots.pdf")
+```
+
+
+## GDT DotPlot genes of interest
+```{r gdt-dotplot-genes-relevant}
+gdt_genes_dotplot <- c(
+  "TRDC", "TRGC2", "TRBC1", "TRAC", # TCR genes
+  "CD4", "CD8A", "CD8B", # co-receptors
+  "RAG1", "CD1C", "CD3E", # DP(q)
+  "MKI67", "CD28", # ISP (p)
+  "NOTCH3", "HES4", # Notch signaling
+  "BCL11B", "GATA3", "TCF12", "IL7R", "RUNX1", "STAT5B", "TCF3", "MYB", # TCR rearrangement
+  "EGR1", "ID3", "IKZF4", "NR4A1", "GNG4", "PDCD1", # TCR signaling and stop rearrangement
+  "NT5E", "CD7", "CD27", # immature GD
+  "IFI6", "MX1", "IRF1", # IFN signaling
+  "S1PR1", "KLF2", # egress
+  "TBX21", "EOMES", "IFNG", "GZMK", # type 1 effector
+  "RORC", "RORA", "CCR6", "IL23R" # type 3 effector
+)
+
+lineage_dotplot(
+  seuratobj = seur_thym$gdt,
+  genes_vector = c(gdt_genes_dotplot),
+  lines_coord = c(4.5, 7.5, 10.5, 12.5, 14.5, 22.5, 28.5, 31.5, 34.5, 36.5),
+  p_size = c(5, 8.5),
+  file_name = "ch2_fig10_gdt_dotplot.pdf"
+)
+```
+
+
+
 
 
 
