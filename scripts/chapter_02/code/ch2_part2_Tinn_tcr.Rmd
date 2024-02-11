@@ -1,0 +1,461 @@
+---
+title: "Chapter 2 - Tinn TCR rearrangement"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+This notebook is for figures 10, 13 and 18 in chapter 2.
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(grDevices)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+
+seur_thym <- list(
+  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS"),
+  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS"),
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.mait.RDS"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gd.RDS")
+)
+```
+
+
+
+
+
+# PREPARE DATA
+
+## Clean up data
+Do a bit of cleanup
+```{r}
+# sanity check
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data),]) == rownames(seur_thym$mait@meta.data), useNA="ifany"
+# )
+
+# clean up metadata columns (don't remove TCR columns!!)
+# colnames(seur_thym$nkt@meta.data)
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data[,33:77] <- NULL
+    return(x)
+    }
+)
+
+# add column "clusters per lineage"
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
+    return(x)
+    }
+  )
+```
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# iNKT cells
+
+## Clean up data
+```{r inkt-tcr-cleanup}
+nkt.tcr <- seur_thym$nkt@meta.data %>%
+  rownames_to_column("cellid") %>%
+  as_tibble() %>%
+  select(cellid, clusters_per_lineage, grep("_gene_Dominant", colnames(seur_thym$nkt@meta.data), value=T)) %>%
+  dplyr::rename(TRAV = TCR_Alpha_Gamma_V_gene_Dominant,
+                TRAJ = TCR_Alpha_Gamma_J_gene_Dominant,
+                TRBV = TCR_Beta_Delta_V_gene_Dominant,
+                TRBD = TCR_Beta_Delta_D_gene_Dominant,
+                TRBJ = TCR_Beta_Delta_J_gene_Dominant) %>%
+  na.omit(!clusters_per_lineage) %>%
+  mutate(TRAV = str_remove(TRAV, pattern = "\\*[^.]*$"),
+         TRAJ = str_remove(TRAJ, pattern = "\\*[^.]*$"),
+         TRBV = str_remove(TRBV, pattern = "\\*[^.]*$"),
+         TRBD = str_remove(TRBD, pattern = "\\*[^.]*$"),
+         TRBD = case_when(TRBD=="" ~ "NA", .default=TRBD),
+         TRBJ = str_remove(TRBJ, pattern = "\\*[^.]*$")) %>%
+  filter(TRAV=="TRAV10")
+dim(nkt.tcr)
+```
+We have TCR information for 224 cells out of 2,535 (only 390 cells in donor 4 though).
+
+
+## Highlight TRAV10
+```{r inkt-tcr-highlight-trav10}
+# highlight TRAV10
+do_DimPlot(sample = seur_thym$nkt, cells.highlight = pull(nkt.tcr[,"cellid"]), plot.title = "TRAV10 (224 cells)",
+           legend.position = "none", na.value = "grey90", colors.use = "#a40000")
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig12_inkt_tcr_trav10.pdf", width=3, height=3)
+```
+
+
+## Plot TCRa usage
+```{r inkt-tcra-usage}
+nkt.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRAJ)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRAJ))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=c("#8dd3c7", "#ffffb3", "#bebada"), name="")+
+    labs(x='',y="%cells", title=expression(paste("J", alpha)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig12_inkt_tcrusage_alphachain.pdf", width=5, height=5)
+```
+
+
+## Plot TCRb usage
+```{r inkt-tcrb-usage}
+# barplot TCR usage per cluster
+cols.TRBV <-
+  c(
+    "TRBV4-2" = "#EAF1F4",
+    "TRBV5-1" = "#93D4DB",
+    "TRBV6-5" = "#99CCA7",
+    "TRBV7-3" = "#57AA65",
+    "TRBV12-2" = "#A7A365",
+    "TRBV19" = "#C2947E",
+    "TRBV21-1" = "#785158",
+    "TRBV23-1" = "#757575",
+    "TRBV25-1" = "#3D7D8F",
+    "TRBV27" = "#956E73"
+  )
+cols.TRBD <- c(
+  "NA" = "grey",
+  "TRBD1" = "#9DCD84",
+  "TRBD2" = "#E9AA6C"
+)
+cols.TRBJ <-
+  c(
+    "TRBJ1-1" = "#EB924A",
+    "TRBJ1-2" = "#3EACCC",
+    "TRBJ1-3" = "#61C2DA",
+    "TRBJ1-4" = "#F4CBA0",
+    "TRBJ1-5" = "#A7A7C7",
+    "TRBJ1-6" = "#E8A1CF",
+    "TRBJ2-1" = "#E7D9DB",
+    "TRBJ2-2" = "#736B9D",
+    "TRBJ2-3" = "#DEE9E9",
+    "TRBJ2-4" = "#EF4F55",
+    "TRBJ2-5" = "#76C76C",
+    "TRBJ2-6" = "#1E2223",
+    "TRBJ2-7" = "#E7D9DB"
+  )
+
+plot_grid(
+  nkt.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRBV)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRBV))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols.TRBV, name="")+
+    labs(x='',y="%cells", title=expression(paste("V", beta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  nkt.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRBD)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRBD))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols.TRBD, name="")+
+    labs(x='',y="%cells", title=expression(paste("D", beta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  nkt.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRBJ)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRBJ))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols.TRBJ, name="")+
+    labs(x='',y="%cells", title=expression(paste("J", beta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  ncol=3)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig12_inkt_tcrusage_betachain.pdf", width=15, height=5)
+```
+
+
+
+
+# MAIT cells
+
+## Clean up data
+```{r mait-tcr-cleanup}
+mait.tcr <- seur_thym$mait@meta.data %>%
+  rownames_to_column("cellid") %>%
+  as_tibble() %>%
+  select(cellid, clusters_per_lineage, grep("_gene_Dominant", colnames(seur_thym$mait@meta.data), value=T)) %>%
+  dplyr::rename(TRAV = TCR_Alpha_Gamma_V_gene_Dominant,
+                TRAJ = TCR_Alpha_Gamma_J_gene_Dominant,
+                TRBV = TCR_Beta_Delta_V_gene_Dominant,
+                TRBD = TCR_Beta_Delta_D_gene_Dominant,
+                TRBJ = TCR_Beta_Delta_J_gene_Dominant) %>%
+  na.omit(!clusters_per_lineage) %>%
+  mutate(TRAV = str_remove(TRAV, pattern = "\\*[^.]*$"),
+         TRAJ = str_remove(TRAJ, pattern = "\\*[^.]*$"),
+         TRBV = str_remove(TRBV, pattern = "\\*[^.]*$"),
+         TRBD = str_remove(TRBD, pattern = "\\*[^.]*$"),
+         TRBD = case_when(TRBD=="" ~ "NA", .default=TRBD),
+         TRBJ = str_remove(TRBJ, pattern = "\\*[^.]*$")) %>%
+  filter(TRAV=="TRAV1-2")
+dim(mait.tcr)
+```
+We have TCR information for 325 cells out of 4,656 (only 683 cells in donor 4 though).
+
+
+## Highlight TRAV1-2
+```{r mait-tcr-highlight-trav1}
+# highlight TRAV1-2
+SCpubr::do_DimPlot(sample = seur_thym$mait, cells.highlight = pull(mait.tcr[,"cellid"]), plot.title = "TRAV1-2 (325 cells)",
+                   legend.position = "none",na.value = "grey90", colors.use = "#a40000")
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig15_mait_tcr_trav1.pdf", width=3, height=3)
+```
+
+
+## Plot TCRa usage
+```{r mait-tcra-usage}
+mait.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRAJ)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRAJ))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=colorRampPalette(brewer.pal(7, "Set3"))(13), name="")+
+    labs(x='',y="%cells", title=expression(paste("J", alpha)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig15_mait_tcrusage_alphachain.pdf", width=5, height=5)
+```
+
+
+## Plot TCRb usage
+```{r mait-tcrb-usage}
+# barplot TCR usage per cluster
+trbv_mait <- unique(mait.tcr$TRBV)
+cols.TRBV.extend <- hcl.colors(17, "Temps")
+names(cols.TRBV.extend) <- trbv_mait[!trbv_mait %in% names(cols.TRBV)]
+cols.TRBV <- c(cols.TRBV, cols.TRBV.extend)
+# length(cols.TRBV)
+# table(trbv_mait %in% names(cols.TRBV))
+
+plot_grid(
+  mait.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRBV)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRBV))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols.TRBV, name="")+
+    labs(x='',y="%cells", title=expression(paste("V", beta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=25),
+          axis.title.y=element_text(size=25),
+          title=element_text(size=35)),
+  mait.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRBD)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRBD))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols.TRBD, name="")+
+    labs(x='',y="%cells", title=expression(paste("D", beta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=25),
+          axis.title.y=element_text(size=25),
+          title=element_text(size=35)),
+  mait.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRBJ)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRBJ))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols.TRBJ, name="")+
+    labs(x='',y="%cells", title=expression(paste("J", beta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=25),
+          axis.title.y=element_text(size=25),
+          title=element_text(size=35)),
+  ncol=3, rel_widths = c(1.2,1,1))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig15_mait_tcrusage_betachain.pdf", width=15, height=5)
+```
+
+
+
+
+# GDT cells
+
+## Clean up data
+```{r gdt-tcr-cleanup}
+gd.tcr <- seur_thym$gdt@meta.data %>%
+  rownames_to_column("cellid") %>%
+  as_tibble() %>%
+  select(cellid, clusters_per_lineage, grep("_gene_Dominant", colnames(seur_thym$gdt@meta.data), value=T)) %>%
+  dplyr::rename(TRGV = TCR_Alpha_Gamma_V_gene_Dominant,
+                TRGJ = TCR_Alpha_Gamma_J_gene_Dominant,
+                TRDV = TCR_Beta_Delta_V_gene_Dominant,
+                TRDD = TCR_Beta_Delta_D_gene_Dominant,
+                TRDJ = TCR_Beta_Delta_J_gene_Dominant) %>%
+  na.omit(!clusters_per_lineage) %>%
+  mutate(TRGV = str_remove(TRGV, pattern = "\\*[^.]*$"),
+         TRGJ = str_remove(TRGJ, pattern = "\\*[^.]*$"),
+         TRDV = str_remove(TRDV, pattern = "\\*[^.]*$"),
+         TRDD = str_remove(TRDD, pattern = "\\*[^.]*$"),
+         TRDJ = str_remove(TRDJ, pattern = "\\*[^.]*$")) %>%
+  filter(!TRGV %in% grep("TRA", TRDV, value=T)) %>%
+  filter(!TRDD %in% grep("TRB", TRDD, value=T)) %>%
+  filter(!TRDJ %in% grep("TRB", TRDJ, value=T))
+dim(gd.tcr)
+```
+We have TCR information for 790 cells out of 2,975 (only 1,599 cells in donor 4 though).
+
+
+## Highlight TRDV1, TRDV2, TRDV3
+```{r gdt-tcr-highlight-trdv, fig.height=7, fig.width=7}
+# highlight TRDV1, TRDV2, TRDV3 and TRGV9
+plot_grid(
+  SCpubr::do_DimPlot(sample = seur_thym$gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV1","cellid"]), plot.title = "TRDV1",
+                     legend.position = "none", na.value = "grey90", colors.use = "#a40000"),
+  SCpubr::do_DimPlot(sample = seur_thym$gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV2","cellid"]), plot.title = "TRDV2",
+                     legend.position = "none", na.value = "grey90", colors.use = "blue"),
+  SCpubr::do_DimPlot(sample = seur_thym$gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV3","cellid"]), plot.title = "TRDV3",
+                     legend.position = "none", na.value = "grey90", colors.use = "#318f49"),
+  SCpubr::do_DimPlot(sample = seur_thym$gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRGV=="TRGV9","cellid"]), plot.title = "TRGV9",
+                     legend.position = "none", na.value = "grey90", colors.use = "gold"),
+  nrow=2)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig19_gdt_tcr_trdv.pdf", width=6, height=6)
+```
+
+
+## Plot TCRd usage
+```{r gdt-tcrd-usage, fig.width=15}
+plot_grid(
+    gd.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRDV)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    filter(TRDV!="") %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRDV))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=c("#a40000", "blue", "#318f49"), name="")+
+    labs(x='',y="%cells", title=expression(paste("V", delta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  gd.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRDD)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    filter(TRDD!="") %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRDD))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=colorRampPalette(brewer.pal(5, "Set3"))(5), name="")+
+    labs(x='',y="%cells", title=expression(paste("D", delta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  
+  gd.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRDJ)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRDJ))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=colorRampPalette(brewer.pal(4, "Set3"))(4), name="")+
+    labs(x='',y="%cells", title=expression(paste("J", delta)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  ncol=3
+)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig19_gdt_tcrusage_deltachain.pdf", width=15, height=5)
+```
+
+
+
+## Plot TCRg usage
+```{r gdt-tcrg-usage, fig.width=10}
+# barplot TCR usage per cluster
+cols_TRG <- c("TRGV1" = "#CF597E", "TRGV2" = "#a40000", "TRGV3" = "#16317d", "TRGV4" = "#007e2f", "TRGV5" = "#ffcd12",
+              "TRGV5P" = "#D86279", "TRGV8" = "#1FA990", "TRGV9" = "#E9A26A", "TRGV10" = "#DB6577", "TRGV11" = "#E16C72", 
+              "TRGJ1" = "#93CB83", 
+              "TRGJP" = "#C7D88D", "TRGJP1" = "#EADB94", "TRGJP2" = "#EACE85")
+plot_grid(
+    gd.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRGV)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    # filter(TRDV!="") %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRGV))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols_TRG, name="")+
+    labs(x='',y="%cells", title=expression(paste("V", gamma)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  gd.tcr %>%
+    summarise(n=n(), .by=c(clusters_per_lineage, TRGJ)) %>%
+    group_by(clusters_per_lineage) %>% filter(sum(n)>10) %>% ungroup() %>%
+    ggplot(aes(x=clusters_per_lineage, y=n, fill=TRGJ))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=cols_TRG, name="")+
+    labs(x='',y="%cells", title=expression(paste("J", gamma)))+
+    theme_cowplot()+
+    theme(axis.text.x=element_text(angle=45, hjust=1, size=20),
+          axis.title.y=element_text(size=20),
+          title=element_text(size=30)),
+  ncol=2
+)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig19_gdt_tcrusage_gammachain.pdf", width=10, height=5)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
