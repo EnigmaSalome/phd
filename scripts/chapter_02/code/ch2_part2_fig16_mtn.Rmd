@@ -1,0 +1,231 @@
+---
+title: "Chapter 2 - Metaneighbor between thymocyte lineages"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+This notebook is for figure 16
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(ggrepel)
+library(RColorBrewer)
+library(grDevices)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+library(MetaNeighbor)
+library(SummarizedExperiment)
+library(gplots)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+
+seur_thym <- list(
+  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS"),
+  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS"),
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.mait.RDS"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gd.RDS")
+)
+```
+
+
+
+
+
+# PREPARE DATA
+
+## Clean up data
+Do a bit of cleanup
+```{r}
+# sanity check
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data),]) == rownames(seur_thym$mait@meta.data), useNA="ifany"
+# )
+
+# clean up metadata columns (don't remove TCR columns!!)
+# colnames(seur_thym$nkt@meta.data)
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data[,33:77] <- NULL
+    return(x)
+    }
+)
+
+# add column "clusters per lineage"
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
+    return(x)
+    }
+  )
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# METANEIGHBOR
+
+## Run Metaneighbor
+```{r mtn-run, fig.height=10, fig.width=10}
+# get union of HVGs
+hvg.all <- unique(c(VariableFeatures(seur_thym$nkt),
+                    VariableFeatures(seur_thym$mait),
+                    VariableFeatures(seur_thym$gdt),
+                    VariableFeatures(seur_thym$cd4),
+                    VariableFeatures(seur_thym$cd8)))
+length(hvg.all) # 5864 genes
+
+# merge seurat objects
+seur_thym_joint <- merge(seur_thym$cd4, y = c(seur_thym$cd8, seur_thym$mait, seur_thym$nkt, seur_thym$gdt))
+table(seur_thym_joint@meta.data$clusters_per_lineage, useNA="ifany")
+
+# make into summarized experiment for metaneighbor
+se <- SummarizedExperiment(assays=seur_thym_joint@assays[["RNA"]]@counts,
+                           colData=seur_thym_joint@meta.data[,c("cell.ident", "clusters_per_lineage")])
+
+# run metaneighbor
+mtn <- MetaNeighborUS(var_genes=hvg.all,
+                      dat=se,
+                      study_id=seur_thym_joint$cell.ident,
+                      cell_type=seur_thym_joint$clusters_per_lineage,
+                      fast_version=TRUE)
+
+# plot full dendrogram
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab="AUROC",
+          # text labels
+          cexRow=0.6,
+          cexCol=0.6,
+          # colRow=col_text,
+          # colCol=col_text,
+          # margins
+          margins=c(7,7))
+```
+
+
+## Tconv vs Tinn
+```{r tconv-tinn, fig.height=10, fig.width=10}
+# Bubble plot
+mtn.df <- reshape2::melt(mtn)
+mtn.df1 <- mtn.df %>%
+  mutate(Var1 = gsub(".*\\|", "", Var1)) %>%
+  mutate(Var2 = gsub(".*\\|", "", Var2)) %>%
+  as_tibble() %>%
+  dplyr::rename(auroc=value) %>%
+  filter(Var1 %in% grep("CD4_thymus_c|CD8_thymus_c", Var1, value=T),
+         Var2 %in% grep("NKT_thymus_c|MAIT_thymus_c|GDT_thymus_c", Var2, value=T)) %>%
+  mutate(Var1=str_replace(Var1, "_thymus", ""),
+         Var2=str_replace(Var2, "_thymus", ""))
+
+ggplot(mtn.df1, aes(x=factor(Var1, levels=c("CD8_c0", "CD4_c0", "CD4_c1", "CD4_c2", "CD8_c1", # DP/cd8aa
+                                            "CD4_c3", "CD8_c3", # ccr9
+                                            "CD4_c4", "CD8_c4", # ccr7
+                                            "CD8_c5", "CD4_c5", "CD4_c6", 
+                                            "CD8_c2")), # effector
+                    y=factor(Var2, levels=rev(c("GDT_c0", "GDT_c1", "GDT_c2", "GDT_c3", "GDT_c4", "iNKT_c0", "MAIT_c0", "MAIT_c1", # DP/cd8aa
+                                                "iNKT_c1", "MAIT_c2", # ccr9
+                                                "iNKT_c2", "MAIT_c4", "MAIT_c5", # ccr7
+                                                "iNKT_c3", "iNKT_c4", "MAIT_c3", # Treg/agonist
+                                                "iNKT_c5", "iNKT_c6", "MAIT_c6", "GDT_c5", "GDT_c6", "GDT_c7"))))) +
+  geom_point(aes(size = abs(auroc-0.5), color= auroc))+
+  geom_text(data=mtn.df1 %>% filter(auroc>0.8) %>% mutate(across("auroc", \(x) round(x,2))), aes(label=auroc), color="white")+
+  scale_size_continuous(limits=c(0,0.5), breaks=seq(0,0.5, by=0.1), range = c(1, 15))+
+  # scale_size_manual(values=c(10,5,1))+
+  scale_color_gradient2(low="#2166ac", mid="white", high="#a50f15", midpoint=0.5, limits=c(0,1), name="AUROC", breaks=seq(0,1, by=0.2))+
+  guides(size=guide_legend(nrow=1))+
+  labs(x="conventional T",y="innate T", size="AUROC")+
+  theme_cowplot()+
+  theme(legend.position="bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text = element_text(size=15),
+        axis.text.x = element_text(angle=45, hjust=1),
+        axis.title=element_text(size=20))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig16_metaneighbor_tconv_tinn.pdf", width=12, height=12)
+```
+
+## Tconv vs Tconv
+```{r tconv-tconv, fig.height=7, fig.width=7}
+mtn.df2 <- mtn.df %>%
+  mutate(Var1 = gsub(".*\\|", "", Var1)) %>%
+  mutate(Var2 = gsub(".*\\|", "", Var2)) %>%
+  as_tibble() %>%
+  dplyr::rename(auroc=value) %>%
+  filter(Var1 %in% grep("CD4_thymus_c|CD8_thymus_c", Var1, value=T),
+         Var2 %in% grep("CD4_thymus_c|CD8_thymus_c", Var2, value=T)) %>%
+  mutate(Var1=str_replace(Var1, "_thymus", ""),
+         Var2=str_replace(Var2, "_thymus", ""))
+
+ggplot(mtn.df2, aes(x=factor(Var1, levels=c("CD8_c0", "CD4_c0", "CD4_c1", "CD4_c2", "CD8_c1", # DP/cd8aa
+                                     "CD4_c3", "CD8_c3", # ccr9
+                                     "CD4_c4", "CD8_c4", # ccr7
+                                     "CD8_c5", "CD4_c5", "CD4_c6", 
+                                     "CD8_c2")), # effector
+             y=factor(Var2, levels=rev(c("CD8_c0", "CD4_c0", "CD4_c1", "CD4_c2", "CD8_c1", # DP/cd8aa
+                                         "CD4_c3", "CD8_c3", # ccr9
+                                         "CD4_c4", "CD8_c4", # ccr7
+                                         "CD8_c5", "CD4_c5", "CD4_c6", 
+                                         "CD8_c2"))))) +
+  geom_point(aes(size = abs(auroc-0.5), color= auroc))+
+  geom_text(data=mtn.df2 %>% filter(auroc>0.8) %>% mutate(across("auroc", \(x) round(x,2))), aes(label=auroc), color="white")+
+  scale_size_continuous(limits=c(0,0.5), breaks=seq(0,0.5, by=0.1), range = c(1, 15))+
+  # scale_size_manual(values=c(10,5,1))+
+  scale_color_gradient2(low="#2166ac", mid="white", high="#a50f15", midpoint=0.5, limits=c(0,1), name="AUROC", breaks=seq(0,1, by=0.2))+
+  guides(size=guide_legend(nrow=1))+
+  labs(x="conventional T",y="conventional T", size="AUROC")+
+  theme_cowplot()+
+  theme(legend.position="bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text = element_text(size=15),
+        axis.text.x = element_text(angle=45, hjust=1),
+        axis.title=element_text(size=20))
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
