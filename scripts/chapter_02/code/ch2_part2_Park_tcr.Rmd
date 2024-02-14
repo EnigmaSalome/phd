@@ -1,0 +1,220 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+This notebook is for Appendix ??
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_park <- readRDS("~/Projects/phd/data/seurat_objects/park2020/park_thymus_seu_gene_names.rds")
+DimPlot(seur_park)
+seur_park@meta.data
+
+park_metadata <- read.csv("~/Projects/phd/data/seurat_objects/park2020/park_metadata_thymocyte.csv")
+# table(rownames(seur_park@meta.data) %in% park_metadata$index, useNA="ifany")
+```
+
+Import VDJ information
+```{r import-vdj}
+vdj_folders <- list.files("~/Projects/phd/data/seurat_objects/park2020/thymus_paper_vdj")
+
+supptable1 <- read.csv("~/Projects/phd/data/seurat_objects/park2020/aay3224_table_s1_fix.csv", skip=1)
+table(unique(park_metadata$file) %in% supptable1$FileName, useNA="ifany")
+table(vdj_folders %in% supptable1$VDJ_file, useNA="ifany")
+
+supptable1 <- supptable1 %>%
+  select(FileName, VDJ_file) %>%
+  dplyr::rename(file=FileName) %>%
+  filter(VDJ_file!="None") %>%
+  filter(file %in% unique(park_metadata$file)) # we're only interested in VDJ that's in our GEX data
+table(unique(supptable1$file) %in% unique(park_metadata$file), useNA="ifany")
+table(unique(supptable1$VDJ_file) %in% vdj_folders, useNA="ifany")
+
+# restrict vdj folders
+vdj_folders <- vdj_folders[vdj_folders %in% unique(supptable1$VDJ_file)]
+
+
+
+# iterate through VDJ
+barcodes_inkt <- c()
+barcodes_mait <- c()
+barcodes_trdv2 <- c()
+barcodes_trgv9 <- c()
+for(folder in vdj_folders){
+  cat("---", folder, "---\n")
+  
+  # get gex sample name
+  gex_sample_name <- supptable1 %>% filter(VDJ_file==folder) %>% pull(file)
+  cat("\nGEX sample name:", gex_sample_name)
+  
+  # get vdj df
+  vdj_df <- read.csv(paste0(
+    "~/Projects/phd/data/seurat_objects/park2020/thymus_paper_vdj/",
+    folder,
+    "/filtered_contig_annotations.csv"
+  )) %>%
+    mutate(gex_sample=gex_sample_name) %>%
+    relocate(gex_sample) %>%
+    mutate(index=str_remove(barcode, "-.")) %>%
+    mutate(index=paste0(gex_sample, "-", index)) %>%
+    relocate(index)
+  cat("\nNb rows in total df:", nrow(vdj_df))
+  # number of iNKT & MAIT
+  vdj_df_nkt <- vdj_df %>%
+    filter(high_confidence=="True" & productive=="True") %>%
+    filter(v_gene=="TRAV10" & j_gene=="TRAJ18")
+  vdj_df_mait <- vdj_df %>%
+    filter(high_confidence=="True" & productive=="True") %>%
+    filter(v_gene=="TRAV1-2" & j_gene %in% c("TRAJ33"))
+  vdj_df_trdv2 <- vdj_df %>%
+    filter(high_confidence=="True" & productive=="True") %>%
+    filter(v_gene=="TRDV2")
+  vdj_df_trgv9 <- vdj_df %>%
+    filter(high_confidence=="True" & productive=="True") %>%
+    filter(v_gene=="TRGV9")
+  cat("\nNb of iNKT:", nrow(vdj_df_nkt))
+  cat("\nNb of MAIT:", nrow(vdj_df_mait))
+  cat("\nNb of VD2:", nrow(vdj_df_trdv2))
+  cat("\nNb of VG9:", nrow(vdj_df_trgv9))
+  # filter vdj file for cells found in park_metadata
+  vdj_df <- vdj_df %>%
+    filter(index %in% unique(park_metadata$index)) %>%
+    filter(full_length=="True")
+  cat("\nNb of GEX cells with VDJ info:", length(unique(vdj_df$index)))
+  cat("\nNb of GEX cells iNKT:", length(intersect(unique(vdj_df$index), unique(vdj_df_nkt$index))))
+  cat("\nNb of GEX cells MAIT:", length(intersect(unique(vdj_df$index), unique(vdj_df_mait$index))))
+  cat("\nNb of GEX cells TRDV2:", length(intersect(unique(vdj_df$index), unique(vdj_df_trdv2$index))))
+  cat("\nNb of GEX cells TRGV9:", length(intersect(unique(vdj_df$index), unique(vdj_df_trgv9$index))))
+  cat("\n\n")
+  
+  # save nkt & mait barcodes
+  barcodes_inkt <- c(barcodes_inkt, unique(vdj_df_nkt$index))
+  barcodes_mait <- c(barcodes_mait, unique(vdj_df_mait$index))
+  barcodes_trdv2 <- c(barcodes_trdv2, unique(vdj_df_trdv2$index))
+  barcodes_trgv9 <- c(barcodes_trgv9, unique(vdj_df_trgv9$index))
+}
+
+length(unique(barcodes_inkt))
+length(unique(barcodes_mait))
+
+
+```
+
+
+```{r}
+DimPlot(
+  seur_park,
+  cells.highlight = list("iNKT"=barcodes_inkt, "MAIT"=barcodes_mait, "TRDV2"=barcodes_trdv2, "TRGV9"=barcodes_trgv9),
+  cols.highlight = c("#3182bd", "#9e9ac8", "#df65b0", "black"),
+  sizes.highlight = 2
+  )
+
+# table(barcodes_mait %in% rownames(seur_park@meta.data))
+# park_metadata %>%
+#   filter(park_metadata$index %in% barcodes_mait) %>%
+#   count(cell.types)
+```
+
+
+
+```{r}
+test <- read.csv(paste0(
+    "~/Projects/phd/data/seurat_objects/park2020/thymus_paper_vdj/",
+    vdj_folders[3],
+    "/filtered_contig_annotations.csv"
+  )) %>%
+    mutate(gex_sample=supptable1 %>% filter(VDJ_file==vdj_folders[3]) %>% pull(file)) %>%
+    relocate(gex_sample) %>%
+    mutate(index=str_remove(barcode, "-.")) %>%
+    mutate(index=paste0(gex_sample, "-", index)) %>%
+    relocate(index)
+
+test %>%
+  # group_by(index) %>%
+  filter(v_gene %in% c("TRGV9"))
+```
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# ANALYSIS
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
