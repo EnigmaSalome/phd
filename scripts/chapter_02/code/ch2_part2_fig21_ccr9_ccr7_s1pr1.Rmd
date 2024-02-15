@@ -1,0 +1,244 @@
+---
+title: "Chapter 2 - CCR9, CCR7 and S1PR1 expression"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+This notebook is for figure 21 in chapter 2.
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+setwd("~/Projects/phd/")
+
+# HUMAN
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+
+seur_thym_hu <- list(
+  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS"),
+  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS"),
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.mait.RDS"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gd.RDS")
+)
+
+# MOUSE
+seur_thym_ms <- list(
+  "tconv"=readRDS("~/Projects/phd/data/seurat_objects/chopp2020/MouseThymusChoppEtAl2020.rds"),
+  "nkt"=readRDS("~/Projects/phd/data/seurat_objects/harshakrovi2020/ms_nkt_seurobj.rds"),
+  "mait"=readRDS("~/Projects/phd/data/seurat_objects/legoux2019/ms_mait_seurobj.rds"),
+  "gdt"=readRDS("~/Projects/phd/data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+)
+```
+
+
+
+
+# PREPARE DATA
+
+## Clean up data
+Do a bit of cleanup
+```{r}
+# sanity check
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data),]) == rownames(seur_thym$mait@meta.data), useNA="ifany"
+# )
+
+# clean up metadata columns
+# colnames(seur_thym$cd8@meta.data)
+seur_thym_hu <- lapply(
+  seur_thym_hu,
+  function(x){
+    x@meta.data[,13:77] <- NULL
+    return(x)
+    }
+)
+
+# add column "clusters per lineage"
+seur_thym_hu <- lapply(
+  seur_thym_hu,
+  function(x){
+    x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
+    return(x)
+    }
+  )
+
+# remove level "11" in harsha krovi data
+seur_thym_ms$nkt$cell_type <- factor(seur_thym_ms$nkt$cell_type, levels=c("Stage0", "iNKTp", "iNKT1", "iNKT2", "iNKT17"))
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+dimplot <- function(seurobj, group, col_vector, file_name="no"){
+  if(file_name=="no"){
+    do_DimPlot(seurobj, group.by=group, colors.use = col_vector)
+  }
+  else{
+    p <- do_DimPlot(seurobj, group.by=group, colors.use = col_vector, legend.position = "none", raster=T, raster.dpi=2048, pt.size=7)
+    ggsave(filename=paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section3/", file_name), plot=p, width=4, height=4)
+  }
+}
+
+plotccr9ccr7 <- function(seurobj, genes=c("CCR9", "CCR7", "S1PR1"), file_name="no"){
+  if(file_name=="no"){
+    do_NebulosaPlot(seurobj, features=genes)
+  }
+  else{
+    p <- ggrastr::rasterize(
+      do_NebulosaPlot(seurobj, features=genes[1]),
+      layers="Point",
+      dpi=300
+    ) |
+      ggrastr::rasterize(
+        do_NebulosaPlot(seurobj, features=genes[2]),
+        layers="Point",
+        dpi=300
+      ) |
+      ggrastr::rasterize(
+        do_NebulosaPlot(seurobj, features=genes[3]),
+        layers="Point",
+        dpi=300
+      )
+    ggsave(filename=paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section3/", file_name), plot=p, width=12, height=5)
+  }
+}
+```
+
+
+
+
+# DimPlot with clusters
+
+# Human
+```{r dimplot-human}
+# to plot in notebook
+dimplot(seurobj = seur_thym_hu$cd4, group="clusters_per_lineage", col_vector=cols_thym_cd4)
+dimplot(seurobj = seur_thym_hu$cd8, group="clusters_per_lineage", col_vector=cols_thym_cd8)
+dimplot(seurobj = seur_thym_hu$nkt, group="clusters_per_lineage", col_vector=cols_thym_nkt)
+dimplot(seurobj = seur_thym_hu$mait, group="clusters_per_lineage", col_vector=cols_thym_mait)
+dimplot(seurobj = seur_thym_hu$gdt, group="clusters_per_lineage", col_vector=cols_thym_gdt)
+
+# to save
+# dimplot(seurobj = seur_thym_hu$cd4, group="clusters_per_lineage", col_vector=cols_thym_cd4, file_name="fig21_umap_hu_cd4_clusters.pdf")
+# dimplot(seurobj = seur_thym_hu$cd8, group="clusters_per_lineage", col_vector=cols_thym_cd8, file_name="fig21_umap_hu_cd8_clusters.pdf")
+# dimplot(seurobj = seur_thym_hu$nkt, group="clusters_per_lineage", col_vector=cols_thym_nkt, file_name="fig21_umap_hu_nkt_clusters.pdf")
+# dimplot(seurobj = seur_thym_hu$mait, group="clusters_per_lineage", col_vector=cols_thym_mait, file_name="fig21_umap_hu_mait_clusters.pdf")
+# dimplot(seurobj = seur_thym_hu$gdt, group="clusters_per_lineage", col_vector=cols_thym_gdt, file_name="fig21_umap_hu_gdt_clusters.pdf")
+```
+
+
+# Mouse
+```{r dimplot-mouse}
+dimplot(seurobj = seur_thym_ms$tconv, group="cluster", col_vector=cols_chopp_ms)
+dimplot(seurobj = seur_thym_ms$nkt, group="cell_type", col_vector=cols_harsha_ms)
+dimplot(seurobj = seur_thym_ms$mait, group="cell_type", col_vector=cols_legoux_ms)
+dimplot(seurobj = seur_thym_ms$gdt, group="gd_clusters", col_vector=cols_lee_ms)
+
+# save
+# dimplot(seurobj = seur_thym_ms$tconv, group="cluster", col_vector=cols_chopp_ms, file_name="fig21_umap_ms_cd4cd8_clusters.pdf")
+# dimplot(seurobj = seur_thym_ms$nkt, group="cell_type", col_vector=cols_harsha_ms, file_name="fig21_umap_ms_nkt_clusters.pdf")
+# dimplot(seurobj = seur_thym_ms$mait, group="cell_type", col_vector=cols_legoux_ms, file_name="fig21_umap_ms_mait_clusters.pdf")
+# dimplot(seurobj = seur_thym_ms$gdt, group="gd_clusters", col_vector=cols_lee_ms, file_name="fig21_umap_ms_gdt_clusters.pdf")
+```
+
+
+
+
+# CCR9 and CCR7 expression
+
+## Human
+```{r ccr9ccr7-human, fig.height=5, fig.width=14}
+plotccr9ccr7(seur_thym_hu$cd4)
+plotccr9ccr7(seur_thym_hu$cd8)
+plotccr9ccr7(seur_thym_hu$nkt)
+plotccr9ccr7(seur_thym_hu$mait)
+plotccr9ccr7(seur_thym_hu$gdt)
+
+# to save
+# plotccr9ccr7(seur_thym_hu$cd4, file_name = "fig21_umap_hu_cd4_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_thym_hu$cd8, file_name = "fig21_umap_hu_cd8_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_thym_hu$nkt, file_name = "fig21_umap_hu_nkt_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_thym_hu$mait, file_name = "fig21_umap_hu_mait_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_thym_hu$gdt, file_name = "fig21_umap_hu_gdt_ccr9ccr7.pdf")
+```
+
+
+## Mouse
+```{r ccr9-ccr7-mouse, fig.height=6, fig.width=14}
+plotccr9ccr7(seur_thym_ms$tconv)
+DotPlot(seur_thym_ms$tconv, features=c("Ccr9", "Ccr7", "S1pr1")) # sanity check
+plotccr9ccr7(seur_thym_ms$nkt)
+DotPlot(seur_thym_ms$nkt, features=c("Ccr9", "Ccr7", "S1pr1")) # sanity check
+plotccr9ccr7(seur_thym_ms$mait)
+DotPlot(seur_thym_ms$mait, features=c("Ccr9", "Ccr7", "S1pr1"))
+plotccr9ccr7(seur_thym_ms$gdt)
+DotPlot(seur_thym_ms$gdt, features=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"), group.by="gd_clusters") # sanity check
+
+
+# to save
+# plotccr9ccr7(seur_thym_ms$tconv, genes=c("Ccr9", "Ccr7", "S1pr1"), file_name = "fig21_umap_ms_cd4cd8_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_thym_ms$nkt, genes=c("Ccr9", "Ccr7", "S1pr1"),   file_name = "fig21_umap_ms_nkt_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_thym_ms$mait, genes=c("Ccr9", "Ccr7", "S1pr1"),  file_name = "fig21_umap_ms_mait_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_thym_ms$gdt, genes=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"),   file_name = "fig21_umap_ms_gdt_ccr9ccr7.pdf")
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
