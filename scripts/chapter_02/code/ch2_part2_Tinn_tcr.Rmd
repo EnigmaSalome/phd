@@ -82,6 +82,8 @@ seur_thym <- lapply(
 ```
 
 
+
+
 # FUNCTIONS
 ```{r define-functions}
 
