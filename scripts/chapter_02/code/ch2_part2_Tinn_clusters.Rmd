@@ -166,6 +166,25 @@ lineage_dimplot <- function(seurobj, col_vector, file_name="no"){
   }
 }
 
+lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwidth=6){
+  p <- seurobj@meta.data %>%
+    group_by(Donor, clusters_per_lineage) %>%
+    count() %>%
+    ggplot(aes(x=Donor, y=n, fill=clusters_per_lineage))+
+    geom_bar(stat="identity", position="fill")+
+    scale_fill_manual(values=col_vector)+
+    labs(x="Donor", y="% cells", fill="")+
+    theme_cowplot()#+
+  # theme(axis.text=element_text(size=5/.pt),
+  #       axis.title=element_text(size=7/.pt),
+  #       legend.text = element_text(size=5/.pt))
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/", file_name),
+           plot=p,
+           width=figwidth, height=5, units="in")
+  }
+}
+
 lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
   p <- do_FeaturePlot(
     seuratobj,
@@ -239,6 +258,9 @@ lineage_dotplot <- function(seuratobj, genes_vector, lines_coord, p_size=c(5,7.5
 ## DimPlot
 ```{r inkt-umap}
 lineage_dimplot(seurobj = seur_thym$nkt, col_vector = cols_thym_nkt, file_name = "ch2_fig10_inkt_umap.pdf")
+
+# cluster comp per donor
+lineage_clustersperdonor(seurobj = seur_thym$nkt, col_vector = cols_thym_nkt, file_name = "ch2_fig10_inkt_clustersperdonor.pdf")
 ```
 
 
@@ -401,6 +423,8 @@ mean_shannon_thymus_C6 <- mean(replicate(100, shannon_iteration()))
 ## DimPlot
 ```{r mait-umap}
 lineage_dimplot(seurobj = seur_thym$mait, col_vector = cols_thym_mait, file_name = "ch2_fig10_mait_umap.pdf")
+
+lineage_clustersperdonor(seurobj = seur_thym$mait, col_vector = cols_thym_mait, file_name = "ch2_fig10_mait_clustersperdonor.pdf")
 ```
 
 ## DotPlot with marker genes
@@ -496,6 +520,8 @@ lineage_dotplot(
 ## DimPlot
 ```{r gdt-umap}
 lineage_dimplot(seurobj = seur_thym$gdt, col_vector = cols_thym_gdt, file_name = "ch2_fig10_gdt_umap.pdf")
+
+lineage_clustersperdonor(seurobj = seur_thym$gdt, col_vector = cols_thym_gdt, file_name = "ch2_fig10_gdt_clustersperdonor.pdf", figwidth=5)
 ```
 
 ## DotPlot with marker genes
