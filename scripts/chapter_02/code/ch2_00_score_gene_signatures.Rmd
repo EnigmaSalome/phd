@@ -1,0 +1,197 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+
+seur_thym <- list(
+  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS"),
+  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS"),
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.mait.RDS"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gd.RDS")
+)
+```
+
+
+
+
+# THYMUS GENE SIGNATURES
+
+## Clean up thymocyte data
+Do a bit of cleanup
+```{r}
+# sanity check
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data),]) == rownames(seur_thym$mait@meta.data), useNA="ifany"
+# )
+
+# clean up metadata columns
+# colnames(seur_thym$gdt@meta.data)
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data[,c(13:18, 33:77)] <- NULL
+    return(x)
+    }
+)
+
+# add column "clusters per lineage"
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
+    return(x)
+    }
+  )
+```
+
+
+## Gene signatures
+```{r gene-signatures}
+# Get Park et al. gene signatures
+park_markergenes <- read.csv("./data/litterature_gene_signatures/park_genesignatures.csv", row.names=1)
+park_gene_signatures <- c(
+  "DNp",
+  "DNq",
+  "DPp",
+  "DPq",
+  "abT_entry",
+  "CD4T",
+  "CD8T",
+  "CD8aa1",
+  "CD8aa2",
+  "gdT",
+  "T_agonist",
+  "Treg_diff",
+  "Treg",
+  "NKT",
+  "Th17"
+)
+park_gene_signatures_list <- as.list(park_markergenes[,park_gene_signatures])
+names(park_gene_signatures_list) <- paste0("park_", names(park_gene_signatures_list))
+
+# Get Chopp et al. gene signatures
+chopp_signatures <- read.csv("~/Projects/phd/data/litterature_gene_signatures/chopp_gene_signatures.csv")
+chopp_gene_signatures_list <- as.list(chopp_signatures)
+names(chopp_gene_signatures_list) <- paste0("chopp_", names(chopp_gene_signatures_list))
+
+# Personally curated gene signatures from litterature (already scored in integrated seurat object)
+# perso_gene_signatures <- list(
+#   "effector"=c("HOPX", "GZMB", "NKG7", "TBX21", "PRF1", "GZMA", "KLRD1", "EOMES", "CCR6", "RORC", "JUNB", "FOS", "RORA", "FOSB"),
+#   "naive"   =c("SATB1", "TCF7", "LEF1", "CCR7", "SELL", "FOXP1", "KLF2", "SOX4", "ID3", "BACH2"),
+#   "egress"  =c("KLF2", "CORO1A", "CCR7", "CXCR4", "CXCR6", "FOXO1", "CXCR3", "S1PR1", "S1PR4", "S100A4", "S100A6", "EMP3") # from Sanchez Sanchez
+#   )
+
+
+# Combined gene lists
+gene_signatures_list <- c(park_gene_signatures_list, chopp_gene_signatures_list)
+gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x!=""]) # remove empty genes
+gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x %in% rownames(seur_integrated)]) # remove genes not found in our data
+lapply(gene_signatures_list, function(x) length(x)) # sanity check (between 0-5 genes per signature lost)
+
+
+# add module score to integrated object (better for choice of control genes)
+seur_integrated <- AddModuleScore(
+  object = seur_integrated,
+  assay = "RNA",
+  features = gene_signatures_list,
+  name=names(gene_signatures_list),
+  seed=1
+  )
+colnames(seur_integrated@meta.data)[32:49] <- names(gene_signatures_list)
+
+# little sanity check
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_naive", "naive"))
+# ggplot(as.data.frame(seur_integrated@meta.data), aes(x=score_egress, y=egress))+ geom_point()
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_effector", "effector"))
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_egress", "egress"))
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_cd8aa", "park_CD8aa1"))
+# FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("chopp_cd4_signature", "chopp_cd8_signature"), split.by="tissue")
+
+# add scores to all individual thymic seurat objects
+signatures_to_add <- c("score_naive", "score_effector", "score_egress", names(gene_signatures_list))
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data[,signatures_to_add] <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), signatures_to_add]
+    return(x)
+    }
+  )
+# colnames(seur_thym$cd4@meta.data) # sanity check
+```
+
+
+## Save integrated and thymocyte objects
+```{r save-thymocyte-rds}
+saveRDS(seur_integrated, "./data/seurat_objects/seurat_human_integrated_object_23_12_01_with_parkchopp_signatures.rds")
+saveRDS(seur_thym$cd4, "./data/seurat_objects/thymus_objects/seurat_thymus_cd4_with_gene_signatures.rds")
+saveRDS(seur_thym$cd8, "./data/seurat_objects/thymus_objects/seurat_thymus_cd8_with_gene_signatures.rds")
+saveRDS(seur_thym$nkt, "./data/seurat_objects/thymus_objects/seurat_thymus_nkt_with_gene_signatures.rds")
+saveRDS(seur_thym$mait, "./data/seurat_objects/thymus_objects/seurat_thymus_mait_with_gene_signatures.rds")
+saveRDS(seur_thym$gdt, "./data/seurat_objects/thymus_objects/seurat_thymus_gdt_with_gene_signatures.rds")
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
