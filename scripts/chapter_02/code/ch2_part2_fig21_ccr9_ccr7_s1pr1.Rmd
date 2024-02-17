@@ -39,14 +39,14 @@ source("~/Projects/phd/scripts/colors_universal.R")
 setwd("~/Projects/phd/")
 
 # HUMAN
-seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01_with_parkchopp_signatures.rds")
 
 seur_thym_hu <- list(
-  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS"),
-  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS"),
-  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS"),
-  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.mait.RDS"),
-  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gd.RDS")
+  "cd4"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_cd4_with_gene_signatures.rds"),
+  "cd8"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_cd8_with_gene_signatures.rds"),
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_nkt_with_gene_signatures.rds"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_mait_with_gene_signatures.rds"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_gdt_with_gene_signatures.rds")
 )
 
 # MOUSE
@@ -54,7 +54,8 @@ seur_thym_ms <- list(
   "tconv"=readRDS("~/Projects/phd/data/seurat_objects/chopp2020/MouseThymusChoppEtAl2020.rds"),
   "nkt"=readRDS("~/Projects/phd/data/seurat_objects/harshakrovi2020/ms_nkt_seurobj.rds"),
   "mait"=readRDS("~/Projects/phd/data/seurat_objects/legoux2019/ms_mait_seurobj.rds"),
-  "gdt"=readRDS("~/Projects/phd/data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+  # "gdt"=readRDS("~/Projects/phd/data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+  "gdt"=readRDS("~/Projects/HumanThymusProject/data/cross-species/00_Reproduce_UMAPs/ms_gdt_seurobj_lee_subclusters.rds")
 )
 ```
 
@@ -72,22 +73,22 @@ Do a bit of cleanup
 
 # clean up metadata columns
 # colnames(seur_thym$cd8@meta.data)
-seur_thym_hu <- lapply(
-  seur_thym_hu,
-  function(x){
-    x@meta.data[,13:77] <- NULL
-    return(x)
-    }
-)
-
-# add column "clusters per lineage"
-seur_thym_hu <- lapply(
-  seur_thym_hu,
-  function(x){
-    x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
-    return(x)
-    }
-  )
+# seur_thym_hu <- lapply(
+#   seur_thym_hu,
+#   function(x){
+#     x@meta.data[,13:77] <- NULL
+#     return(x)
+#     }
+# )
+# 
+# # add column "clusters per lineage"
+# seur_thym_hu <- lapply(
+#   seur_thym_hu,
+#   function(x){
+#     x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
+#     return(x)
+#     }
+#   )
 
 # remove level "11" in harsha krovi data
 seur_thym_ms$nkt$cell_type <- factor(seur_thym_ms$nkt$cell_type, levels=c("Stage0", "iNKTp", "iNKT1", "iNKT2", "iNKT17"))
@@ -105,6 +106,34 @@ dimplot <- function(seurobj, group, col_vector, file_name="no"){
   else{
     p <- do_DimPlot(seurobj, group.by=group, colors.use = col_vector, legend.position = "none", raster=T, raster.dpi=2048, pt.size=7)
     ggsave(filename=paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section3/", file_name), plot=p, width=4, height=4)
+  }
+}
+
+featureplot <- function(seurobj, feature, col_viridis="E", ordercells=T, file_name="no"){
+  if(file_name=="no"){
+    do_FeaturePlot(
+      seurobj,
+      features = feature,
+      order = ordercells,
+      min.cutoff=0,
+      use_viridis = T,
+      viridis.palette = col_viridis,
+      legend.position = "right"
+    )
+  }
+  else{
+    p <- ggrastr::rasterize(
+      do_FeaturePlot(
+        seurobj,
+        features = feature,
+        order = ordercells,
+        use_viridis = T,
+        min.cutoff=0,
+        viridis.palette = col_viridis,
+        legend.position = "right"
+      ),
+      dpi=300)
+    ggsave(filename=paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section3/", file_name), plot=p, width=7, height=5)
   }
 }
 
@@ -148,8 +177,14 @@ dimplot(seurobj = seur_thym_hu$mait, group="clusters_per_lineage", col_vector=co
 dimplot(seurobj = seur_thym_hu$gdt, group="clusters_per_lineage", col_vector=cols_thym_gdt)
 
 # to save
-# dimplot(seurobj = seur_thym_hu$cd4, group="clusters_per_lineage", col_vector=cols_thym_cd4, file_name="fig21_umap_hu_cd4_clusters.pdf")
-# dimplot(seurobj = seur_thym_hu$cd8, group="clusters_per_lineage", col_vector=cols_thym_cd8, file_name="fig21_umap_hu_cd8_clusters.pdf")
+# dimplot(seurobj = seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")],
+#         group="clusters_integrated_data", col_vector=cols_integrated, file_name="fig21_umap_hu_cd4cd8_clusters.pdf")
+# featureplot(seurobj = seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")],
+#             feature="park_abT_entry", file_name="fig21_umap_hu_cd4cd8_signatures_SPentry.pdf")
+# featureplot(seurobj = seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")],
+#             feature="park_CD4T", file_name="fig21_umap_hu_cd4cd8_signatures_CD4T.pdf")
+# featureplot(seurobj = seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")],
+#             feature="park_CD8T", file_name="fig21_umap_hu_cd4cd8_signatures_CD8T.pdf")
 # dimplot(seurobj = seur_thym_hu$nkt, group="clusters_per_lineage", col_vector=cols_thym_nkt, file_name="fig21_umap_hu_nkt_clusters.pdf")
 # dimplot(seurobj = seur_thym_hu$mait, group="clusters_per_lineage", col_vector=cols_thym_mait, file_name="fig21_umap_hu_mait_clusters.pdf")
 # dimplot(seurobj = seur_thym_hu$gdt, group="clusters_per_lineage", col_vector=cols_thym_gdt, file_name="fig21_umap_hu_gdt_clusters.pdf")
@@ -179,16 +214,29 @@ dimplot(seurobj = seur_thym_ms$gdt, group="gd_clusters", col_vector=cols_lee_ms)
 ```{r ccr9ccr7-human, fig.height=5, fig.width=14}
 plotccr9ccr7(seur_thym_hu$cd4)
 plotccr9ccr7(seur_thym_hu$cd8)
+plotccr9ccr7(seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")])
 plotccr9ccr7(seur_thym_hu$nkt)
 plotccr9ccr7(seur_thym_hu$mait)
 plotccr9ccr7(seur_thym_hu$gdt)
+DotPlot(seur_thym_hu$gdt, group.by="clusters_per_lineage", features=c("CCR9", "CCR7", "S1PR1")) # sanity check
+
 
 # to save
 # plotccr9ccr7(seur_thym_hu$cd4, file_name = "fig21_umap_hu_cd4_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$cd8, file_name = "fig21_umap_hu_cd8_ccr9ccr7.pdf")
+# plotccr9ccr7(seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")], file_name = "fig21_umap_hu_cd4cd8_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$nkt, file_name = "fig21_umap_hu_nkt_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$mait, file_name = "fig21_umap_hu_mait_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$gdt, file_name = "fig21_umap_hu_gdt_ccr9ccr7.pdf")
+```
+
+Surprising to see S1PR1 expression in GDT_thymus_c1 (immature), let's look a bit more at it
+```{r}
+DotPlot(seur_thym_hu$gdt, group.by="clusters_per_lineage", features=c("CCR9", "CCR7", "S1PR1", "KLF2")) # also KLF2 expression
+sanchez_gdt <- readRDS("~/Downloads/GSE180059_PNT_Seurat.rds")
+DimPlot(sanchez_gdt, label=T)
+FeaturePlot(sanchez_gdt, features="S1PR1", order=T)
+DotPlot(sanchez_gdt, features=c("CCR9", "CCR7", "S1PR1", "KLF2")) # also KLF2 expression
 ```
 
 
@@ -203,34 +251,11 @@ DotPlot(seur_thym_ms$mait, features=c("Ccr9", "Ccr7", "S1pr1"))
 plotccr9ccr7(seur_thym_ms$gdt)
 DotPlot(seur_thym_ms$gdt, features=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"), group.by="gd_clusters") # sanity check
 
-
 # to save
 # plotccr9ccr7(seur_thym_ms$tconv, genes=c("Ccr9", "Ccr7", "S1pr1"), file_name = "fig21_umap_ms_cd4cd8_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_ms$nkt, genes=c("Ccr9", "Ccr7", "S1pr1"),   file_name = "fig21_umap_ms_nkt_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_ms$mait, genes=c("Ccr9", "Ccr7", "S1pr1"),  file_name = "fig21_umap_ms_mait_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_ms$gdt, genes=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"),   file_name = "fig21_umap_ms_gdt_ccr9ccr7.pdf")
-```
-
-## Analysis 1
-```{r analysis-1}
-
-```
-
-
-## Analysis 2
-```{r analysis-2}
-
-```
-
-## Analysis 3
-```{r analysis-3}
-
-```
-
-
-## Analysis 4
-```{r analysis-4}
-
 ```
 
 
