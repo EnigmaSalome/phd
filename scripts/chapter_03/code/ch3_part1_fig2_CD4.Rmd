@@ -1,0 +1,318 @@
+---
+title: "Chapter 3 - CD4 blood figure"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(cowplot)
+library(SCpubr)
+library(gplots)
+library(RColorBrewer)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SummarizedExperiment)
+library(MetaNeighbor)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+seur_pbmc_cd4 <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_cd4_clean.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+lineage_dimplot <- function(seurobj, col_vector, file_name="no"){
+  p <- do_DimPlot(
+    seurobj,
+    group.by="clusters_per_lineage",
+    colors.use = col_vector,
+    legend.position = "right",
+    # raster = T,
+    # raster.dpi=2048,
+    pt.size = 0.5#,
+    # border.size=1.5
+  )+
+    theme(
+      # axis.title=element_text(size=8),
+      # axis.text=element_text(size=6),
+      legend.key.size = unit(0.4, "cm"),
+      legend.title=element_text(size=8),
+      legend.text = element_text(size=6)
+    )
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=4, height=2.5, units="in")
+  }
+}
+
+
+lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwidth=6){
+  p <- seurobj@meta.data %>%
+    group_by(Donor, clusters_per_lineage) %>%
+    dplyr::count() %>%
+    group_by(Donor) %>%
+    mutate(sum_per_donor=sum(n),
+           freq=n*100/sum_per_donor) %>%
+  ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
+    geom_bar(stat="identity")+
+    scale_fill_manual(values=col_vector)+
+    labs(x="Donor", y="% cells", fill="")+
+    theme_cowplot()#+
+  # theme(axis.text=element_text(size=5/.pt),
+  #       axis.title=element_text(size=7/.pt),
+  #       legend.text = element_text(size=5/.pt))
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=figwidth, height=5, units="in")
+  }
+}
+```
+
+
+
+
+# UMAP and distribution per donor
+
+## Umap
+```{r umap-cd4}
+lineage_dimplot(seurobj = seur_pbmc_cd4, col_vector=cols_pbmc_cd4, file_name="ch3_fig2_cd4_umap.pdf")
+```
+
+
+## Distribution per donor
+```{r barplot_per_donor}
+# cluster comp per donor
+lineage_clustersperdonor(seurobj = seur_pbmc_cd4, col_vector = cols_pbmc_cd4, file_name = "ch3_fig2_cd4_clustersperdonor.pdf")
+```
+
+
+
+
+# METANEIGHBOR
+
+## Metaneighbor thymocytes x pbmcs
+
+Prepare data.
+```{r prepare-cd4-mtn}
+# Get only CD4s
+seur_cd4 <- subset(seur_integrated, subset=tcell_lineage=="CD4")
+table(seur_cd4@meta.data[,c("clusters_per_lineage", "donor_id")], useNA="ifany") # sanity check
+
+# rename clusters_per_lineage for easier interpretation of metaneighbor
+seur_cd4@meta.data$clusters_per_lineage_annotated <- case_when(
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c0" ~ "CD4 ISP (c0)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c1" ~ "CD4 ISPp (c1)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c2" ~ "DP (c2)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c3" ~ "CD4 CCR9+ (c3)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c4" ~ "CD4 CCR7+ (c4)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c5" ~ "CD4 agonist (c5)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c6" ~ "Thymus Treg (c6)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c0" ~ "PBMC naive (c0)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c1" ~ "PBMC naive (c1)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c2" ~ "PBMC Tcm (c2)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c3" ~ "PBMC Treg (c3)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c4" ~ "PBMC Tem (c4)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c5" ~ "PBMC Temra (c5)"
+)
+# table(seur_cd4@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
+
+# get count matrix
+se_cd4 <- SummarizedExperiment(
+  assays=seur_cd4@assays[["RNA"]]@counts,
+  colData=seur_cd4@meta.data[,c("clusters_per_lineage_annotated", "donor_id", "tissue")]
+  )
+
+# get CD4-specific HVGs
+# seur_thym_cd4 <- readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS")
+# seur_pbmc_cd4 <- readRDS("./data/seurat_objects/pbmc_objects/blood.CD4_03_16_23.RDS")
+# hvg_cd4_joint <- union(VariableFeatures(seur_thym_cd4), VariableFeatures(seur_pbmc_cd4))
+hvg_cd4 <- VariableFeatures(FindVariableFeatures(seur_cd4))
+length(intersect(VariableFeatures(seur_integrated), hvg_cd4))
+# length(intersect(hvg_cd4, hvg_cd4_joint))
+```
+
+Run metaneighbor with donors as "study" (to check for reproducibility across donors).
+```{r run_mtn_branches, fig.width=14, fig.height=14}
+mtn <- MetaNeighborUS(
+  # var_genes=VariableFeatures(seur_integrated),
+  var_genes=hvg_cd4,
+  dat=se_cd4,
+  study_id=se_cd4$donor_id,
+  cell_type=se_cd4$clusters_per_lineage_annotated,
+  fast_version=T
+  )
+
+# quick heatmap
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          keysize = 1.2,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9))
+```
+
+
+Now re-run it with "tissue" as study_id (will be easier to read).
+```{r, fig.width=8, fig.height=8}
+mtn2 <- MetaNeighborUS(
+  # var_genes=VariableFeatures(seur_integrated),
+  var_genes=hvg_cd4,
+  dat=se_cd4,
+  study_id=se_cd4$tissue,
+  cell_type=se_cd4$clusters_per_lineage_annotated,
+  fast_version=T
+  )
+
+# quick heatmap
+heatmap.2(mtn2,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          # keysize = 0.5,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(7,7)
+          )
+```
+
+
+
+
+```{r plot-cd4-mtn, fig.width=10, fig.height=10}
+library(reshape2)
+# library(ggrepel)
+cd4_mtn_order <- c(
+  "Thymus|CD4 ISP (c0)",
+  "Thymus|CD4 ISPp (c1)",
+  "Thymus|DP (c2)",
+  "Thymus|CD4 CCR9+ (c3)",
+  "Thymus|CD4 CCR7+ (c4)",
+  "PBMC|PBMC naive (c0)",
+  "PBMC|PBMC naive (c1)",
+  "Thymus|CD4 agonist (c5)",
+  "Thymus|Thymus Treg (c6)",
+  "PBMC|PBMC Treg (c3)",
+  "PBMC|PBMC Tcm (c2)",
+  "PBMC|PBMC Tem (c4)",
+  "PBMC|PBMC Temra (c5)"
+)
+mtn.df <- melt(mtn2) %>%
+  mutate(Var1=factor(Var1, levels=cd4_mtn_order),
+         Var2=factor(Var2, levels=cd4_mtn_order)) %>%
+  dplyr::rename(auroc=value)
+
+
+# BUBBLE PLOT
+# library(scales)
+ggplot(mtn.df, aes(x=Var1, y=Var2)) +
+  geom_point(aes(size = abs(auroc-0.5), color= auroc))+
+  geom_text(data=mtn.df %>% filter(auroc>0.8 | auroc < 0.1) %>% mutate(across("auroc", \(x) round(x,2))), aes(label=auroc), color="white", size=3)+
+  scale_size_continuous(limits=c(0,1), breaks=seq(0,1, by=0.2), range = c(0, 20), guide="none")+
+  scale_color_gradient2(low="#2166ac", mid="white", high="#a50f15", midpoint=0.5, limits=c(0,1), name="AUROC", breaks=seq(0,1, by=0.2))+
+  labs(x="",y="", size="AUROC")+
+  theme_cowplot()+
+  theme(legend.position="bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text = element_text(size=8),
+        axis.title=element_text(size=8),
+        axis.text.x=element_text(angle=45, hjust=1),
+        
+  )
+ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig2_cd4_mtn_thymuspbmc.pdf",
+       width=7, height=7)
+
+```
+
+
+## Analysis 2
+```{r analysis-2, fig.width=10, fig.height=10}
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
