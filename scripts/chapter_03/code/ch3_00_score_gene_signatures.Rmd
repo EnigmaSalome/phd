@@ -1,0 +1,133 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+
+seur_pbmc <- list(
+  "cd4"=readRDS("./data/seurat_objects/pbmc_objects/blood.CD4_03_16_23.RDS"),
+  "cd8"=readRDS("./data/seurat_objects/pbmc_objects/blood.CD8_noMAIT_08_17_23.RDS"),
+  "nkt"=readRDS("./data/seurat_objects/pbmc_objects/blood.nkt_03_16_23.RDS"),
+  "mait"=readRDS("./data/seurat_objects/pbmc_objects/blood.MAIT_03_16_23.RDS"),
+  "gdt"=readRDS("./data/seurat_objects/pbmc_objects/blood.GD_03_16_23.RDS")
+)
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# ANALYSIS
+
+## Clean up pbmc data
+Do a bit of cleanup
+```{r}
+# sanity check
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_pbmc$cd4@meta.data),]) == rownames(seur_pbmc$cd4@meta.data), useNA="ifany")
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_pbmc$cd8@meta.data),]) == rownames(seur_pbmc$cd8@meta.data), useNA="ifany")
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_pbmc$nkt@meta.data),]) == rownames(seur_pbmc$nkt@meta.data), useNA="ifany")
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_pbmc$mait@meta.data),]) == rownames(seur_pbmc$mait@meta.data), useNA="ifany")
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_pbmc$gdt@meta.data),]) == rownames(seur_pbmc$gdt@meta.data), useNA="ifany")
+
+# clean up metadata columns
+# colnames(seur_pbmc$mait@meta.data)
+seur_pbmc <- lapply(
+  seur_pbmc,
+  function(x){
+    x@meta.data[,c(13:18, 33:ncol(x@meta.data))] <- NULL
+    return(x)
+    }
+)
+
+# add column "clusters per lineage"
+seur_pbmc <- lapply(
+  seur_pbmc,
+  function(x){
+    x@meta.data$clusters_per_lineage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "clusters_per_lineage"]
+    return(x)
+    }
+  )
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Save integrated and thymocyte objects
+```{r save-thymocyte-rds}
+# saveRDS(seur_integrated, "./data/seurat_objects/seurat_human_integrated_object_23_12_01_with_parkchopp_signatures.rds")
+saveRDS(seur_pbmc$cd4, "./data/seurat_objects/pbmc_objects/seurat_pbmc_cd4_clean.rds")
+saveRDS(seur_pbmc$cd8, "./data/seurat_objects/pbmc_objects/seurat_pbmc_cd8_clean.rds")
+saveRDS(seur_pbmc$nkt, "./data/seurat_objects/pbmc_objects/seurat_pbmc_nkt_clean.rds")
+saveRDS(seur_pbmc$mait, "./data/seurat_objects/pbmc_objects/seurat_pbmc_mait_clean.rds")
+saveRDS(seur_pbmc$gdt, "./data/seurat_objects/pbmc_objects/seurat_pbmc_gdt_clean.rds")
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
