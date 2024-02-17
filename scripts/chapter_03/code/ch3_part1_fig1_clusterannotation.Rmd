@@ -1,0 +1,181 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+featureplot_save <- function(seurobj=seur_integrated, genes=c("CD4", "CD8A", "CD8B")){
+  for(gene in genes){
+    print(gene)
+    p <- do_FeaturePlot(
+      sample = seurobj,
+      slot="data",
+      cells.highlight=rownames(seurobj@meta.data[seurobj@meta.data$tissue=="PBMC",]),
+      features = gene,
+      use_viridis=T,
+      viridis.palette = "B",
+      legend.position="right",
+      order=T,
+      pt.size=6,
+      raster=T,
+      raster.dpi = 2048
+    )
+    ggsave(filename=paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig1_", gene, ".pdf"),
+           plot=p,
+           width=8, height=7)
+  }
+}
+```
+
+
+
+
+# ANALYSIS
+
+## FeaturePlot with CD4 and CD8
+```{r umap-CD4-CD8}
+genes_to_plot <- c("CD4", "CD8A", "CD8B", "ZBTB7B", "CD40LG", "RUNX3", "LINC02446")
+
+# Expression of key Tconv genes
+for(gene in genes_to_plot){
+  # print(gene)
+  print(do_FeaturePlot(
+      sample = seur_integrated,
+      slot="data",
+      cells.highlight=rownames(seur_integrated@meta.data[seur_integrated@meta.data$tissue=="PBMC",]),
+      features = gene,
+      use_viridis=T,
+      viridis.palette = "B",
+      legend.position="right",
+      order=T,
+      pt.size=1
+    ))
+}
+
+# save CD4, CD8A, CD8B for figure 1
+# featureplot_save()
+```
+
+
+## DotPlot
+```{r dotplot-marker-genes}
+# Supp Fig 3A, but only on thymocytes
+pbmc_cellid <- rownames(seur_integrated@meta.data[seur_integrated@meta.data$tissue=="PBMC",])
+length(pbmc_cellid)
+
+genes_dotplot <- c(
+  "CD4", "CD8A", "CD8B", # coreceptors
+  "EGR1", "EGR3", "NR4A1", # Agonist
+  "TRDC", "TRGC2", # GD
+  "IKZF4", "FOXP3", "CTLA4", "IL2RA", # Treg
+  "STAT1", "IFI6", # IFN sig
+  "CD8B", "RUNX3", "LINC02446", # CD8
+  "CD4", "ZBTB7B", "CD40LG", # CD4
+  "CCR7", "SELL",  #"IL7R", # Naive / exit
+  "FOS", "JUN", "JUNB", # AP1 signaling
+  "EOMES", "TBX21", "RORA", "RORC", "GZMK", "GZMB", "GNLY", "PRF1", "NKG7", "KLRB1", "IFNG", "CCR6" # Effector
+  )
+
+# DotPlot
+fig5_p1 <- do_DotPlot(
+  sample=seur_integrated[,pbmc_cellid],
+  features=genes_dotplot,
+  group.by = "clusters_integrated_data",
+  legend.position = "right",
+  use_viridis = T,
+  viridis.palette = "B",
+  flip=T
+  )+
+  # coord_flip()+
+  theme(axis.text.x=element_text(angle=0, hjust=0.5),
+        axis.text.y=element_text(face="italic"))
+
+# Barplot of nb of cells
+fig5_p2 <- seur_integrated@meta.data %>%
+  as_data_frame() %>%
+  filter(tissue=="PBMC") %>%
+  group_by(clusters_integrated_data, tcell_lineage) %>%
+  count() %>%
+  ggplot(aes(x=clusters_integrated_data, y=n, fill=tcell_lineage))+
+  geom_bar(stat="identity")+
+  scale_fill_manual(values=cols_lineages, name="Cell hashing")+
+  scale_y_continuous(expand = c(0, 0))+
+  # scale_x_discrete(position="top")+
+  labs(x="", y="Number of thymocytes")+
+  theme_cowplot()
+
+# Combine
+fig5_p2 / fig5_p1 + plot_layout(heights = c(1, 4))
+# ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_markergenes.pdf", width=8, height=10)
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
