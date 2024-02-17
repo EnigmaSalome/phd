@@ -1,0 +1,145 @@
+---
+title: "Chapter 2 - Park metaneighbor"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01_with_parkchopp_signatures.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+featureplot <- function(seurobj, feature, col_viridis="E", ordercells=T, file_name="no"){
+  if(file_name=="no"){
+    do_FeaturePlot(
+      seurobj,
+      features = feature,
+      order = ordercells,
+      min.cutoff=0,
+      use_viridis = T,
+      viridis.palette = col_viridis,
+      legend.position = "right"
+    )
+  }
+  else{
+    p <- ggrastr::rasterize(
+      do_FeaturePlot(
+        seurobj,
+        # split.by="tissue",
+        features = feature,
+        order = ordercells,
+        use_viridis = T,
+        min.cutoff=0,
+        viridis.palette = col_viridis,
+        legend.position = "right"
+      ),
+      layer="Points",
+      dpi=300)
+    ggsave(filename=paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_parkmtn/", file_name),
+           plot=p,
+           width=7,
+           height=5
+    )
+  }
+}
+```
+
+
+
+
+# Plot Park signatures on thymocytes
+
+## Analysis 1
+```{r analysis-1}
+# Park signatures
+for(parksig in colnames(seur_integrated@meta.data)[32:46]){
+  print(parksig)
+  featureplot(
+    seurobj = seur_integrated[,seur_integrated@meta.data$tissue=="Thymus"],
+    feature=parksig,
+    file_name=paste0("umap_thymus_", parksig, ".pdf")
+    )
+}
+
+# Chopp signatures
+for(choppsig in colnames(seur_integrated@meta.data)[47:49]){
+  print(choppsig)
+  featureplot(
+    seurobj = seur_integrated[,seur_integrated@meta.data$tissue=="Thymus"],
+    feature=choppsig,
+    file_name=paste0("umap_thymus_", choppsig, ".pdf")
+    )
+}
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
