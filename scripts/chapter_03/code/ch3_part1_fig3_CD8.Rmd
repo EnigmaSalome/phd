@@ -1,5 +1,5 @@
 ---
-title: "Chapter 3 - CD4 blood figure"
+title: "Chapter 3 - CD8 blood figure"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -22,13 +22,13 @@ knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
 ## Import librairies
 ```{r import-librairies}
 library(ggplot2)
-library(cowplot)
-library(SCpubr)
-library(gplots)
 library(RColorBrewer)
+library(cowplot)
 library(tidyverse)
 library(dplyr)
 library(Seurat)
+library(SCpubr)
+library(patchwork)
 library(SummarizedExperiment)
 library(MetaNeighbor)
 
@@ -40,7 +40,7 @@ source("~/Projects/phd/scripts/colors_universal.R")
 seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
 DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
 
-seur_pbmc_cd4 <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_cd4_clean.rds")
+seur_pbmc_cd8 <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_cd8_clean.rds")
 ```
 
 
@@ -103,16 +103,17 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
 # UMAP and distribution per donor
 
 ## Umap
-```{r umap-cd4}
-lineage_dimplot(seurobj = seur_pbmc_cd4, col_vector=cols_pbmc_cd4, file_name="ch3_fig2_cd4_umap.pdf")
+```{r umap-cd8}
+lineage_dimplot(seurobj = seur_pbmc_cd8, col_vector=cols_pbmc_cd8, file_name="ch3_fig3_cd8_umap.pdf")
 ```
 
 
 ## Distribution per donor
 ```{r barplot_per_donor}
 # cluster comp per donor
-lineage_clustersperdonor(seurobj = seur_pbmc_cd4, col_vector = cols_pbmc_cd4, file_name = "ch3_fig2_cd4_clustersperdonor.pdf")
+lineage_clustersperdonor(seurobj = seur_pbmc_cd8, col_vector = cols_pbmc_cd8, file_name = "ch3_fig3_cd8_clustersperdonor.pdf")
 ```
+
 
 
 
@@ -122,52 +123,50 @@ lineage_clustersperdonor(seurobj = seur_pbmc_cd4, col_vector = cols_pbmc_cd4, fi
 ## Metaneighbor thymocytes x pbmcs
 
 Prepare data.
-```{r prepare-cd4-mtn}
-# Get only CD4s
-seur_cd4 <- subset(seur_integrated, subset=tcell_lineage=="CD4")
-table(seur_cd4@meta.data[,c("clusters_per_lineage", "donor_id")], useNA="ifany") # sanity check
+```{r prepare-cd8-mtn}
+# Get only CD8s
+seur_cd8 <- subset(seur_integrated, subset=tcell_lineage=="CD8")
+table(seur_cd8@meta.data[,c("clusters_per_lineage", "donor_id")], useNA="ifany") # sanity check
 
 # rename clusters_per_lineage for easier interpretation of metaneighbor
-seur_cd4@meta.data$clusters_per_lineage_annotated <- case_when(
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c0" ~ "CD4 ISP (c0)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c1" ~ "CD4 ISPp (c1)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c2" ~ "DP (c2)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c3" ~ "CD4 CCR9+ (c3)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c4" ~ "CD4 CCR7+ (c4)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c5" ~ "CD4 agonist (c5)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c6" ~ "Thymus Treg (c6)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c0" ~ "PBMC naive (c0)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c1" ~ "PBMC naive (c1)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c2" ~ "PBMC Tcm (c2)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c3" ~ "PBMC Treg (c3)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c4" ~ "PBMC Tem (c4)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c5" ~ "PBMC Temra (c5)"
+seur_cd8@meta.data$clusters_per_lineage_annotated <- case_when(
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_thymus_c0" ~ "CD8 DP (c0)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_thymus_c1" ~ "GNG4+ CD8aa1 (c1)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_thymus_c2" ~ "ZNF683+ CD8aa2 (c2)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_thymus_c3" ~ "CD8 CCR9+ (c3)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_thymus_c4" ~ "CD8 CCR7+ (c4)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_thymus_c5" ~ "CD8 unknown (c5)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_pbmc_c0" ~ "PBMC naive (c0)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_pbmc_c1" ~ "PBMC Tcm (c1)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_pbmc_c2" ~ "PBMC Tem (c2)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_pbmc_c3" ~ "PBMC Temra (c3)",
+  seur_cd8@meta.data$clusters_per_lineage=="CD8_pbmc_c4" ~ "PBMC Temra (c4)"
 )
-# table(seur_cd4@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
+# table(seur_cd8@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
 
 # get count matrix
-se_cd4 <- SummarizedExperiment(
-  assays=seur_cd4@assays[["RNA"]]@counts,
-  colData=seur_cd4@meta.data[,c("clusters_per_lineage_annotated", "donor_id", "tissue")]
+se_cd8 <- SummarizedExperiment(
+  assays=seur_cd8@assays[["RNA"]]@counts,
+  colData=seur_cd8@meta.data[,c("clusters_per_lineage_annotated", "donor_id", "tissue")]
   )
 
-# get CD4-specific HVGs
-# seur_thym_cd4 <- readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd4.RDS")
-# seur_pbmc_cd4 <- readRDS("./data/seurat_objects/pbmc_objects/blood.CD4_03_16_23.RDS")
-# hvg_cd4_joint <- union(VariableFeatures(seur_thym_cd4), VariableFeatures(seur_pbmc_cd4))
-hvg_cd4 <- VariableFeatures(FindVariableFeatures(seur_cd4))
-length(intersect(VariableFeatures(seur_integrated), hvg_cd4))
-# length(intersect(hvg_cd4, hvg_cd4_joint))
+# get CD8-specific HVGs
+# seur_thym_cd8 <- readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.cd8.RDS")
+# seur_pbmc_cd8 <- readRDS("./data/seurat_objects/pbmc_objects/blood.CD8_03_16_23.RDS")
+# hvg_cd8_joint <- union(VariableFeatures(seur_thym_cd8), VariableFeatures(seur_pbmc_cd8))
+hvg_cd8 <- VariableFeatures(FindVariableFeatures(seur_cd8))
+length(intersect(VariableFeatures(seur_integrated), hvg_cd8)) # 1,243 genes
+# length(intersect(hvg_cd8, hvg_cd8_joint))
 ```
 
 Run metaneighbor with donors as "study" (to check for reproducibility across donors).
 ```{r run_mtn_branches, fig.width=14, fig.height=14}
 mtn <- MetaNeighborUS(
   # var_genes=VariableFeatures(seur_integrated),
-  var_genes=hvg_cd4,
-  dat=se_cd4,
-  study_id=se_cd4$donor_id,
-  cell_type=se_cd4$clusters_per_lineage_annotated,
+  var_genes=hvg_cd8,
+  dat=se_cd8,
+  study_id=se_cd8$donor_id,
+  cell_type=se_cd8$clusters_per_lineage_annotated,
   fast_version=T
   )
 
@@ -194,16 +193,20 @@ heatmap.2(mtn,
           # margins
           margins=c(9,9))
 ```
-
+To note: the PBMC Tem (c2) cluster doesn't have the highest AUROC scores sometimes:
+- donors 7, 8, 9, 10, 11 good
+- donors (5, 6, 12, 13) and (9, 10) good
+- donors (7, 8, 11) and (5, 6, 12, 13) bad
+Maybe correlated to the fact that (5, 6, 12, 13) have more naive and fewer effectors?...
 
 Now re-run it with "tissue" as study_id (will be easier to read).
 ```{r, fig.width=8, fig.height=8}
 mtn2 <- MetaNeighborUS(
   # var_genes=VariableFeatures(seur_integrated),
-  var_genes=hvg_cd4,
-  dat=se_cd4,
-  study_id=se_cd4$tissue,
-  cell_type=se_cd4$clusters_per_lineage_annotated,
+  var_genes=hvg_cd8,
+  dat=se_cd8,
+  study_id=se_cd8$tissue,
+  cell_type=se_cd8$clusters_per_lineage_annotated,
   fast_version=T
   )
 
@@ -228,39 +231,36 @@ heatmap.2(mtn2,
           cexRow=0.6,
           cexCol=0.6,
           # margins
-          margins=c(7,7)
+          margins=c(10,10)
           )
 ```
 
 
 
 
-```{r plot-cd4-mtn, fig.width=10, fig.height=10}
+```{r plot-cd8-mtn, fig.width=10, fig.height=10}
 library(reshape2)
 # library(ggrepel)
-cd4_mtn_order <- c(
-  "Thymus|CD4 ISP (c0)",
-  "Thymus|CD4 ISPp (c1)",
-  "Thymus|DP (c2)",
-  "Thymus|CD4 CCR9+ (c3)",
-  "Thymus|CD4 CCR7+ (c4)",
+cd8_mtn_order <- c(
+  "Thymus|CD8 DP (c0)",
+  "Thymus|CD8 CCR9+ (c3)",
+  "Thymus|CD8 CCR7+ (c4)",
   "PBMC|PBMC naive (c0)",
-  "PBMC|PBMC naive (c1)",
-  "Thymus|CD4 agonist (c5)",
-  "Thymus|Thymus Treg (c6)",
-  "PBMC|PBMC Treg (c3)",
-  "PBMC|PBMC Tcm (c2)",
-  "PBMC|PBMC Tem (c4)",
-  "PBMC|PBMC Temra (c5)"
+  "Thymus|CD8 unknown (c5)",
+  "PBMC|PBMC Tcm (c1)",
+  "Thymus|GNG4+ CD8aa1 (c1)",
+  "Thymus|ZNF683+ CD8aa2 (c2)",
+  "PBMC|PBMC Tem (c2)",
+  "PBMC|PBMC Temra (c3)",
+  "PBMC|PBMC Temra (c4)"
 )
 mtn.df <- melt(mtn2) %>%
-  mutate(Var1=factor(Var1, levels=cd4_mtn_order),
-         Var2=factor(Var2, levels=cd4_mtn_order)) %>%
+  mutate(Var1=factor(Var1, levels=cd8_mtn_order),
+         Var2=factor(Var2, levels=cd8_mtn_order)) %>%
   dplyr::rename(auroc=value)
 
 
 # BUBBLE PLOT
-# library(scales)
 ggplot(mtn.df, aes(x=Var1, y=Var2)) +
   geom_point(aes(size = abs(auroc-0.5), color= auroc))+
   geom_text(data=mtn.df %>% filter(auroc>0.8 | auroc < 0.1) %>% mutate(across("auroc", \(x) round(x,2))), aes(label=auroc), color="white", size=3)+
@@ -275,38 +275,9 @@ ggplot(mtn.df, aes(x=Var1, y=Var2)) +
         axis.text.x=element_text(angle=45, hjust=1),
         
   )
-# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig2_cd4_mtn_thymuspbmc.pdf",
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig3_cd8_mtn_thymuspbmc.pdf",
 #        width=7, height=7)
-
 ```
-
-
-## Analysis 2
-```{r analysis-2, fig.width=10, fig.height=10}
-```
-
-## Analysis 1
-```{r analysis-1}
-
-```
-
-
-## Analysis 2
-```{r analysis-2}
-
-```
-
-## Analysis 3
-```{r analysis-3}
-
-```
-
-
-## Analysis 4
-```{r analysis-4}
-
-```
-
 
 
 
