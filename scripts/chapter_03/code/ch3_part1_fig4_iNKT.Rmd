@@ -1,0 +1,329 @@
+---
+title: "Chapter 3 - iNKT blood figure"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+library(SummarizedExperiment)
+library(MetaNeighbor)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+seur_pbmc_nkt <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_nkt_clean.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+lineage_dimplot <- function(seurobj, col_vector, file_name="no"){
+  p <- do_DimPlot(
+    seurobj,
+    group.by="clusters_per_lineage",
+    colors.use = col_vector,
+    legend.position = "right",
+    # raster = T,
+    # raster.dpi=2048,
+    pt.size = 0.5#,
+    # border.size=1.5
+  )+
+    theme(
+      # axis.title=element_text(size=8),
+      # axis.text=element_text(size=6),
+      legend.key.size = unit(0.4, "cm"),
+      legend.title=element_text(size=8),
+      legend.text = element_text(size=6)
+    )
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=4, height=2.5, units="in")
+  }
+}
+
+
+lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwidth=6){
+  p <- seurobj@meta.data %>%
+    group_by(Donor, clusters_per_lineage) %>%
+    dplyr::count() %>%
+    group_by(Donor) %>%
+    mutate(sum_per_donor=sum(n),
+           freq=n*100/sum_per_donor) %>%
+  ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
+    geom_bar(stat="identity")+
+    scale_fill_manual(values=col_vector)+
+    labs(x="Donor", y="% cells", fill="")+
+    theme_cowplot()#+
+  # theme(axis.text=element_text(size=5/.pt),
+  #       axis.title=element_text(size=7/.pt),
+  #       legend.text = element_text(size=5/.pt))
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=figwidth, height=5, units="in")
+  }
+}
+```
+
+
+
+
+# UMAP and distribution per donor
+
+## Umap
+```{r umap-nkt}
+lineage_dimplot(seurobj = seur_pbmc_nkt, col_vector=cols_pbmc_nkt, file_name="ch3_fig4_nkt_umap.pdf")
+```
+
+
+## Distribution per donor
+```{r barplot_per_donor}
+# cluster comp per donor
+lineage_clustersperdonor(seurobj = seur_pbmc_nkt, col_vector = cols_pbmc_nkt, file_name = "ch3_fig4_nkt_clustersperdonor.pdf")
+```
+
+
+
+
+# METANEIGHBOR
+
+## Metaneighbor thymocytes x pbmcs
+
+Prepare data.
+```{r prepare-nkt-mtn}
+# Get only NKTs
+seur_nkt <- subset(seur_integrated, subset=tcell_lineage=="iNKT")
+table(seur_nkt@meta.data[,c("clusters_per_lineage", "donor_id")], useNA="ifany") # sanity check
+
+# rename clusters_per_lineage for easier interpretation of metaneighbor
+seur_nkt@meta.data$clusters_per_lineage_annotated <- case_when(
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c0" ~ "iNKT CD8aa (c0)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c1" ~ "iNKT CCR9+ (c1)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c2" ~ "iNKT CCR7+ (c2)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c3" ~ "iNKT CCR9+ (c3)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c4" ~ "iNKT CD4+ eff (c4)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c5" ~ "iNKT CD4+ eff (c5)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c6" ~ "iNKT CD4- eff (c6)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c0" ~ "iNKT naive (c0)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c1" ~ "iNKT Tcm (c1)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c2" ~ "iNKT Tem (c2)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c3" ~ "iNKT Temra (c3)"
+)
+# table(seur_nkt@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
+
+# get count matrix
+se_nkt <- SummarizedExperiment(
+  assays=seur_nkt@assays[["RNA"]]@counts,
+  colData=seur_nkt@meta.data[,c("clusters_per_lineage_annotated", "donor_id", "tissue")]
+  )
+
+# get NKT-specific HVGs
+# seur_thym_nkt <- readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.nkt.RDS")
+# seur_pbmc_nkt <- readRDS("./data/seurat_objects/pbmc_objects/blood.NKT_03_16_23.RDS")
+# hvg_nkt_joint <- union(VariableFeatures(seur_thym_nkt), VariableFeatures(seur_pbmc_nkt))
+hvg_nkt <- VariableFeatures(FindVariableFeatures(seur_nkt))
+length(intersect(VariableFeatures(seur_integrated), hvg_nkt)) # 864 genes
+# length(intersect(hvg_nkt, hvg_nkt_joint))
+```
+
+Run metaneighbor with donors as "study" (to check for reproducibility across donors).
+```{r run_mtn_branches, fig.width=14, fig.height=14}
+mtn <- MetaNeighborUS(
+  # var_genes=VariableFeatures(seur_integrated),
+  var_genes=hvg_nkt,
+  dat=se_nkt,
+  study_id=se_nkt$donor_id,
+  cell_type=se_nkt$clusters_per_lineage_annotated,
+  fast_version=T
+  )
+
+# quick heatmap
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          keysize = 1.2,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9))
+```
+To note: the PBMC Temra (c3) between donors 11 and (5, 6, 7) don't have very high AUROCs, but at the same time donor 11 has the most Temra (the other donors have very very few Temra cells), so probably an issue of sampling (cell number).
+
+Now re-run it with "tissue" as study_id (will be easier to read).
+```{r, fig.width=8, fig.height=8}
+mtn2 <- MetaNeighborUS(
+  # var_genes=VariableFeatures(seur_integrated),
+  var_genes=hvg_nkt,
+  dat=se_nkt,
+  study_id=se_nkt$tissue,
+  cell_type=se_nkt$clusters_per_lineage_annotated,
+  fast_version=T
+  )
+
+# quick heatmap
+heatmap.2(mtn2,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          # keysize = 0.5,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(10,10)
+          )
+```
+
+
+
+
+```{r plot-nkt-mtn, fig.width=10, fig.height=10}
+library(reshape2)
+# library(ggrepel)
+nkt_mtn_order <- c(
+  "Thymus|iNKT CD8aa (c0)",
+  "Thymus|iNKT CCR9+ (c1)",
+  "Thymus|iNKT CCR9+ (c3)",
+  "Thymus|iNKT CCR7+ (c2)",
+  "PBMC|iNKT naive (c0)",
+  "Thymus|iNKT CD4+ eff (c4)",
+  "Thymus|iNKT CD4+ eff (c5)",
+  "PBMC|iNKT Tcm (c1)",
+  "Thymus|iNKT CD4- eff (c6)",
+  "PBMC|iNKT Tem (c2)",
+  "PBMC|iNKT Temra (c3)"
+)
+
+# get nb of cells
+ncells.df <- seur_nkt@meta.data %>%
+  group_by(tissue, clusters_per_lineage_annotated) %>%
+  dplyr::count() %>%
+  mutate(var=paste(tissue, clusters_per_lineage_annotated, sep="|")) %>%
+  ungroup() %>%
+  dplyr::select(n, var)
+
+# final df for plotting
+mtn.df <- melt(mtn2) %>%
+  dplyr::rename(auroc=value) %>%
+  left_join(ncells.df, by=c("Var1"="var")) %>%
+  dplyr::rename(Var1_ncells=n) %>%
+  left_join(ncells.df, by=c("Var2"="var")) %>%
+  dplyr::rename(Var2_ncells=n) %>%
+  mutate(Var1=factor(Var1, levels=nkt_mtn_order),
+         Var2=factor(Var2, levels=nkt_mtn_order))
+  
+# barplots
+bp.x <- ggplot(data=mtn.df%>% select(Var1,Var1_ncells) %>% distinct(),
+               aes(x=Var1, y=Var1_ncells))+
+  geom_bar(stat="identity", fill="#bdbdbd") + theme_cowplot()+
+  scale_x_discrete(position="top")+
+  labs(y="# cells")+
+  theme(axis.text = element_text(size=8),
+        # axis.text.x = element_text(size = 8, angle=45, hjust=0),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x=element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y=element_text(size=8),
+        legend.position = "none")
+
+bp.y <- ggplot(data=mtn.df%>% select(Var2,Var2_ncells) %>% distinct(),
+               aes(x=Var2, y=Var2_ncells))+
+  geom_bar(stat="identity", fill="#bdbdbd") +
+  scale_x_discrete(position="top") +
+  labs(y="# cells")+ coord_flip() + theme_cowplot()+
+  theme(axis.title.y = element_blank(),
+        axis.text = element_text(size=8),
+        axis.text.y=element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_text(size=8),
+        axis.line.y=element_blank(),
+        legend.position = "none")
+
+
+# BUBBLE PLOT
+hm.clean <- ggplot(mtn.df, aes(x=Var1, y=Var2)) +
+  geom_point(aes(size = abs(auroc-0.5), color= auroc))+
+  geom_text(data=mtn.df %>% filter(auroc>0.8 | auroc < 0.1) %>% mutate(across("auroc", \(x) round(x,2))), aes(label=auroc), color="white", size=3)+
+  scale_size_continuous(limits=c(0,1), breaks=seq(0,1, by=0.2), range = c(0, 20), guide="none")+
+  scale_color_gradient2(low="#2166ac", mid="white", high="#a50f15", midpoint=0.5, limits=c(0,1), name="AUROC", breaks=seq(0,1, by=0.2))+
+  labs(x="",y="", size="AUROC")+
+  theme_cowplot()+
+  theme(legend.position="bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text = element_text(size=8),
+        axis.title=element_text(size=8),
+        axis.text.x=element_text(angle=45, hjust=1)
+  )
+(bp.x+plot_spacer() + plot_layout(widths = c(5, 1))) / (hm.clean + bp.y + plot_layout(widths = c(5, 1))) + plot_layout(heights = c(1, 5))
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig4_inkt_mtn_thymuspbmc.pdf",
+#        width=8, height=8)
+```
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
