@@ -1,0 +1,421 @@
+---
+title: "Chapter 4 - CD1d and SFR expression in mouse/human thymi"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+This notebook will generate figure 4.6. (first figure of 2nd part of chapter 4)
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+Data from [Park et al.](https://www.science.org/doi/10.1126/science.aay3224).
+```{r import-data}
+# HUMAN THYMUS
+seur.human <- readRDS("~/Projects/HumanThymusProject/data/human-thymus/HumanData_16_ParkIntegration/park_full_seu_gene_names.rds")
+seur_metadata <- read.csv("~/Projects/HumanThymusProject/data/human-thymus/HumanData_16_ParkIntegration/park_fullmetadata.csv")
+# Incorporate metadata in seurat object
+# table(seur_metadata$index == rownames(seur.human@meta.data), useNA="ifany")
+seur.human@meta.data <- cbind(seur.human@meta.data, seur_metadata)
+
+# MOUSE THYMUS
+seur.mouse <- readRDS("~/Projects/HumanThymusProject/data/raw_data/mouse_data/thymus_Park/park_seu_mouse.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# HUMAN THYMUS
+
+## Simplify cell annotation
+```{r hu-cleanup-cell-annot}
+seur.human <- subset(seur.human, Anno_level_3 != "Epi_GCM2") # remove parathyroid cells
+
+# Create a new level of annotation
+seur.human@meta.data$Anno_curated <- seur.human@meta.data$Anno_level_1
+seur.human@meta.data$Anno_curated <- case_when(
+  seur.human@meta.data$Anno_curated=="TEC" & seur.human@meta.data$Anno_level_3=="cTEC" ~ "cTEC",
+  seur.human@meta.data$Anno_curated=="TEC" & seur.human@meta.data$Anno_level_3%in%c("mTEC","TEC(myo)", "TEC(neuro)") ~ "mTEC",
+  seur.human@meta.data$Anno_curated=="T"   & seur.human@meta.data$Anno_level_2=="DN" ~ "DN",
+  seur.human@meta.data$Anno_curated=="T"   & seur.human@meta.data$Anno_level_2=="DP" ~ "DP",
+  seur.human@meta.data$Anno_curated=="T"   & seur.human@meta.data$Anno_level_2=="SP" ~ "SP",
+  seur.human@meta.data$Anno_curated=="Innate_T"   & seur.human@meta.data$Anno_level_3=="NKT" ~ "SP",
+  seur.human@meta.data$Anno_curated=="Innate_T"   & seur.human@meta.data$Anno_level_3=="γδT" ~ "γδT",
+  seur.human@meta.data$Anno_curated=="Endo"  ~ "Endothelial",
+  seur.human@meta.data$Anno_curated=="Ery"   ~ "Erythrocyte",
+  seur.human@meta.data$Anno_curated=="Mesen" ~ "Mesenchymal",
+  seur.human@meta.data$Anno_curated=="Mgk"   ~ "Megakaryocyte",
+  seur.human@meta.data$Anno_curated=="Mast"  ~ "Myeloid",
+  .default=seur.human@meta.data$Anno_curated
+)
+table(seur.human@meta.data$Anno_curated, useNA="ifany")
+table(seur.human@meta.data[,c("Anno_curated", "Anno_level_1")], useNA="ifany")
+
+# expect:
+# B               5,082                          
+# Endo              115
+# Ery               644
+# HSC               501
+# Innate_lymphoid 2,176
+# NKT               349 (Anno_level_1 Innate_T 2931)
+# γδT             2,582 (Anno_level_1 Innate_T 2931)
+# Mesen          21,290
+# Mgk                36
+# Myeloid         4,949 (Anno_level_1 Myeloid 4,801, Mast 148)
+# DN             42,474 (Anno_level_1 T 201,019)
+# DP            108,418 (Anno_level_1 T 201,019)
+# SP             50,127 (Anno_level_1 T 201,019)
+# cTEC           10,156 (Anno_level_1 TEC 17,158)
+# mTEC            6,448 (Anno_level_1 TEC 17,158)
+# TEC_other         554 (Anno_level_1 TEC 17,158)
+
+seur.human@meta.data$Anno_curated <- factor(seur.human@meta.data$Anno_curated,
+                                            levels=c(
+                                              "DN", "DP", "SP", "γδT",
+                                              "cTEC", "mTEC",
+                                              "HSC",
+                                              "Innate_lymphoid",
+                                              "B",
+                                              "Myeloid",
+                                              # "Mast",
+                                              "Erythrocyte",
+                                              "Megakaryocyte",
+                                              "Mesenchymal",
+                                              "Endothelial"
+                                            ))
+
+# see how many cells there are per cluster
+# as.data.frame(table(seur.human$Anno_curated)) %>%
+#   mutate(totalcells=sum(Freq),
+#          percentcells=Freq*100/totalcells) %>%
+#   arrange(percentcells)
+# hu_clusters_abundant <- levels(seur.human@meta.data$Anno_curated)[!levels(seur.human@meta.data$Anno_curated) %in% c("Megakaryocyte",
+#                                                                                                                     "Endothelial",
+#                                                                                                                     "Mast",
+#                                                                                                                     "HSC",
+#                                                                                                                     "Erythrocyte")]
+# remove clusters that contain less than 0.5% of all cells
+# seur.human <- subset(seur.human, !Anno_curated %in% c("Megakaryocyte", "Endothelial", "Mast", "HSC", "Erythrocyte"))
+
+celltypes_col <- c(
+  "mTEC"            = "#CE3F37",
+  "cTEC"            = "#8C6143",
+  "TEC_other"       = "#666666",
+  "DN"              = "#FDCB89",
+  "DP"              = "#9ecae1",
+  "SP"              = "#7FC97F",
+  "γδT"             = "#B6B1C9",
+  "Mesenchymal"     = "#FEE791",
+  "Myeloid"         = "#F2F59A",
+  "B"               = "#2171b5",
+  "Endothelial"     = "#7D449D",
+  "Erythrocyte"     = "#CD1588",
+  "HSC"             = "#9BB5A4",
+  "Innate_lymphoid" = "#EDBB99",
+  # "Mast"            = "#D1B3BB",
+  "Megakaryocyte"   = "#9ABDA4"
+  )
+```
+
+
+## UMAP with cell annotation
+```{r hu-umap-clusters, fig.height=6, fig.width=8}
+# UMAP
+# Idents(seur.human) <- "Anno_curated"
+p1 <- ggrastr::rasterise(
+  # ---
+  do_DimPlot(seur.human,
+             reduction="UMAP",
+             group.by="Anno_curated",
+             # idents.keep=hu_clusters_abundant,
+             # na.value="grey90",
+             colors.use=celltypes_col,
+             legend.position="right",
+             legend.ncol=1
+             # font.size=30,
+             # legend.icon.size=10
+             ),#+
+    # scale_color_manual(values=celltypes_col),
+  # ---
+  layers="Point", dpi=300)
+# ggsave(filename="~/Projects/phd/data/figures/chapter_04/figs_unfinished/section2/ch4_fig6_hu_umap_clusters.pdf",
+#        device = cairo_pdf,
+#        plot=p1,
+#        width=10, height=8)
+```
+
+## DotPlot CD1d and SFR
+```{r hu-dotplot-cd1d-sfr}
+# Plot CD1d and SLAMF1/6
+DotPlot(seur.human,
+        features=rev(c("CD1D",
+                       "SLAMF1",
+                       "SLAMF6"
+        )),
+        group.by="Anno_curated",
+        cols=c("lightgrey", "darkred"),
+        col.min=0,
+        dot.scale=10
+)+
+  coord_flip()+
+  theme_cowplot()+
+  theme(axis.text.x=element_text(angle=45, hjust=1),
+        axis.text.y=element_text(face="italic"))+
+  theme(axis.text=element_text(size=20),
+        axis.text.y=element_text(size=30),
+        legend.text=element_text(size=15),
+        legend.title=element_text(size=20))+ # for CD1MR1 presentation
+  labs(x="", y="")
+# do_DotPlot(
+#     sample=seur.human,
+#     features=rev(c("CD1D",
+#                        "SLAMF1",
+#                        "SLAMF6"
+#                        )),
+#     group.by = "Anno_curated",
+#     legend.position = "right",
+#     use_viridis = T,
+#     viridis.palette = "B",
+#     legend.title="avg expression",
+#     flip=T,
+#     scale=F,
+#   )+
+#     theme(axis.text.y=element_text(face="italic"))
+# ggsave(filename="~/Projects/phd/data/figures/chapter_04/figs_unfinished/section2/ch4_fig6_hu_dotplot_CD1d_SLAMF1_SLAMF6.pdf",
+#        device = cairo_pdf,
+#        width=8, height=4)
+ggsave(filename="~/Desktop/Meyer-lab/Conferences/2024-02_CD1MR1-Hobart/presentation/slide6_hu_dotplot_CD1d_Slamf1_Slamf6.jpeg",
+       width=11, height=6)
+
+
+
+# Plot CD1d and all SFR expression
+DotPlot(seur.human,
+        features=rev(c("CD1D",
+                       "SLAMF1",
+                       "SLAMF6",
+                       "LY9", # SLAMF3
+                       "CD244", # SLAMF4
+                       "CD84", # SLAMF5
+                       "SLAMF7",
+                       "SLAMF8",
+                       "SLAMF9",
+                       "IL7",
+                       "IL15",
+                       "IL15RA"
+                       )),
+        group.by="Anno_curated",
+        cols=c("lightgrey", "darkred"),
+        col.min=0,
+        dot.scale=10
+)+
+  coord_flip()+
+  geom_vline(xintercept = c(3.5, 9.5), linetype="dashed", color="grey")+
+  theme_cowplot()+
+  theme(axis.text.x=element_text(angle=45, hjust=1),
+        axis.text.y=element_text(face="italic"))+
+  labs(x="", y="")
+# do_DotPlot(
+#     sample=seur.human,
+#         features=rev(c("CD1D",
+#                        "SLAMF1",
+#                        "SLAMF6",
+#                        "LY9", # SLAMF3
+#                        "CD244", # SLAMF4
+#                        "CD84", # SLAMF5
+#                        "SLAMF7",
+#                        "SLAMF8",
+#                        "SLAMF9"
+#                        )),
+#     group.by = "Anno_curated",
+#     legend.position = "right",
+#     use_viridis = T,
+#     viridis.palette = "B",
+#     legend.title="avg expression",
+#     flip=T,
+#     scale=F,
+#   )+
+#     geom_hline(yintercept = 6.5, linetype="dashed", color="grey")+
+#     theme(axis.text.y=element_text(face="italic"))
+# ggsave(filename="~/Projects/phd/data/figures/chapter_04/figs_unfinished/section2/ch4_fig6_hu_dotplot_CD1d_SFRs.pdf",
+#        device = cairo_pdf,
+#        width=8, height=5)
+```
+
+
+
+
+# MOUSE THYMUS
+
+## Simplify cell annotation
+```{r ms-cleanup-cell-annot}
+seur.mouse <- subset(seur.mouse, age != "Rag1KO") # 34,073 cells
+
+seur.mouse@meta.data$Anno_curated <- case_when(
+  seur.mouse@meta.data$cell.types == "B"    ~ "B",
+  seur.mouse@meta.data$cell.types %in% c("CD4+T", "CD8+T", "Treg", "αβT(entry)", "IELpA", "IELpB/NKT") ~ "SP",
+  seur.mouse@meta.data$cell.types %in% c("DN(P)", "DN(Q)")           ~ "DN",
+  seur.mouse@meta.data$cell.types %in% c("DP(P)", "DP(Q)")           ~ "DP",
+  seur.mouse@meta.data$cell.types == "Endo"                          ~ "Endothelial",
+  seur.mouse@meta.data$cell.types == "Ery"                           ~ "Erythrocyte",
+  seur.mouse@meta.data$cell.types %in% c("Fb", "VSMC")               ~ "Mesenchymal",
+  seur.mouse@meta.data$cell.types %in% c("HSC", "NMP")               ~ "HSC",
+  seur.mouse@meta.data$cell.types == "NK"                            ~ "Innate_lymphoid",
+  seur.mouse@meta.data$cell.types %in% c("DC1", "DC2", "aDC", "pDC") ~ "Myeloid",
+  seur.mouse@meta.data$cell.types %in% c("Mac", "Mono")              ~ "Myeloid",
+  seur.mouse@meta.data$cell.types %in% c("Epi_unknown", "TEC_early") ~ "TEC_other",
+  seur.mouse@meta.data$cell.types == "cTEC"  ~ "cTEC",
+  seur.mouse@meta.data$cell.types == "mTEC"  ~ "mTEC",
+  seur.mouse@meta.data$cell.types == "γδT"   ~ "γδT"
+)
+
+# table(seur.mouse@meta.data[,c("cell.types", "Anno_curated")], useNA="ifany")
+
+seur.mouse@meta.data$Anno_curated <- factor(seur.mouse@meta.data$Anno_curated,
+                                            levels=c(
+                                              "DN", "DP", "SP", "γδT",
+                                              "cTEC", "mTEC", "TEC_other",
+                                              "HSC",
+                                              "Innate_lymphoid",
+                                              "B",
+                                              "Myeloid",
+                                              "Erythrocyte",
+                                              "Mesenchymal",
+                                              "Endothelial"
+                                            ))
+
+# see how many cells there are per cluster
+# as.data.frame(table(seur.mouse$Anno_curated)) %>%
+#   mutate(totalcells=sum(Freq),
+#          percentcells=Freq*100/totalcells) %>%
+#   arrange(percentcells)
+```
+
+## UMAP with cell annotation
+```{r ms-umap-clusters, fig.height=6, fig.width=8}
+p3 <- ggrastr::rasterise(
+  # ---
+  do_DimPlot(seur.mouse,
+             reduction="umap",
+             group.by="Anno_curated",
+             colors.use=celltypes_col,
+             # label=T,
+             # repel=T,
+             legend.position="right",
+             legend.ncol=1
+  ),
+  # ---
+  layers="Point", dpi=300)
+p3
+# ggsave(filename="~/Projects/phd/data/figures/chapter_04/figs_unfinished/section2/ch4_fig6_ms_umap_clusters.pdf",
+#        plot=p3,
+#        device = cairo_pdf,
+#        width=10, height=8)
+```
+
+
+## DotPlot CD1d and SFR
+```{r ms-dotplot-cd1d-sfr}
+# Plot CD1d and SLAMF1/6
+DotPlot(seur.mouse,
+        features=rev(c(
+          "Cd1d1",
+          "Slamf1",
+          "Slamf6"
+          )),
+        group.by="Anno_curated",
+        cols=c("lightgrey", "darkred"),
+        col.min = 0,
+        dot.scale=10
+)+
+  coord_flip()+
+  theme_cowplot()+
+  theme(axis.text.x=element_text(angle=45, hjust=1),
+        axis.text.y=element_text(face="italic"))+
+  # theme(axis.text=element_text(size=20),
+  #       axis.text.y=element_text(size=30),
+  #       legend.text=element_text(size=15),
+  #       legend.title=element_text(size=20))+ # for CD1MR1 presentation
+  labs(x="", y="")
+# ggsave(filename="~/Projects/phd/data/figures/chapter_04/figs_unfinished/section2/ch4_fig6_ms_dotplot_CD1d_Slamf1_Slamf6.pdf",
+#        device = cairo_pdf,
+#        width=8, height=5)
+# ggsave(filename="~/Desktop/Meyer-lab/Conferences/2024-02_CD1MR1-Hobart/presentation/slide6_ms_dotplot_CD1d_Slamf1_Slamf6.jpeg",
+#        width=11, height=6)
+
+# Plot CD1d and all SFRs
+DotPlot(seur.mouse,
+        features=rev(c(
+          "Cd1d1",
+          "Slamf1",
+          "Slamf6",
+          "Ly9", # SLAMF3
+          "Cd244", # SLAMF4
+          "Cd84", # SLAMF5
+          "Slamf7",
+          "Slamf8",
+          "Slamf9",
+          "Il7",
+          "Il15",
+          "Il15ra"
+        )),
+        group.by="Anno_curated",
+        cols=c("lightgrey", "darkred"),
+        col.min = 0,
+        dot.scale=10
+)+
+  coord_flip()+
+  geom_vline(xintercept = c(3.5, 9.5), linetype="dashed", color="grey")+
+  theme_cowplot()+
+  theme(axis.text.x=element_text(angle=45, hjust=1),
+        axis.text.y=element_text(face="italic"))+
+  labs(x="", y="")
+# ggsave(filename="~/Projects/phd/data/figures/chapter_04/figs_unfinished/section2/ch4_fig6_ms_dotplot_CD1d_SFRs.pdf",
+#        device = cairo_pdf,
+#        width=8, height=5)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
