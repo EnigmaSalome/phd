@@ -181,6 +181,32 @@ cols_chopp_ms <- c(
   "NC-2"="#9dc8b0",
   "Bcell"="#dca4b1"
 )
+cols_chopp_hu <- c(
+  "hs-ISP"    ="#88c068",
+  "hs-DP1"    ="#484947",
+  "hs-DP2"    ="#78639b",
+  "hs-DP3"    ="#f1d9d2",
+  "hs-Sig1"   ="#8e3f8a",
+  "hs-Sig2"   ="#65b1a3",
+  "hs-Sig3"   ="#3979ad",
+  "hs-Sig4"   ="#b2041c",
+  "hs-ImCD4"  ="#bd4e3d",
+  "hs-MatCD4" ="#570c36",
+  "hs-ISC"    ="#1b4a1f",
+  "hs-PreTreg"="#cca000",
+  "hs-Treg"   ="#b91d74",
+  "hs-Treg2"  ="#5a0d63",
+  "hs-Mix"    ="#a6a7a4",
+  "hs-ImCD8"  ="#4963a2",
+  "hs-MatCD8" ="#223165",
+  "hs-CD8"    ="#a3c9d3",
+  "hs-NC1"    ="#60ae67",
+  "hs-Unk"    ="#1f201f",
+  "hs-Bcell"  ="#da9ba7"
+)
+
+
+
 cols_harsha_ms <- c(
   "Stage0"="#fec850",
   "iNKTp"="#d62452",
