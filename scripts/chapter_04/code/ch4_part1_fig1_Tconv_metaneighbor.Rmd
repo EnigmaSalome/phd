@@ -1,0 +1,462 @@
+---
+title: "Chapter 4 - Tconv metaneighbor"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+This notebook is for figure 1 in chapter 4.
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+library(MetaNeighbor)
+library(SummarizedExperiment)
+library(gplots)
+library(reshape2)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+# Seurat tables
+seur_chopp_human <- readRDS("./data/seurat_objects/chopp2020/HumanThymusChoppEtAl2020.rds")
+seur_chopp_human@meta.data$cluster_figure <- Idents(seur_chopp_human)
+seur_chopp_mouse <- readRDS("./data/seurat_objects/chopp2020/MouseThymusChoppEtAl2020.rds")
+
+# Remove B cells
+seur_chopp_human <- subset(seur_chopp_human, subset=cluster_figure != "hs-Bcell")
+seur_chopp_mouse <- subset(seur_chopp_mouse, subset=cluster != "Bcell")
+
+# Orthologs table
+ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_one2one.csv")
+# ortholog.df <- read.csv("~/Projects/HumanThymusProject/data/cross-species/03_BiomartTable/big_ass_ortholog_table.csv") %>%
+#   dplyr::rename(ms_symbol=ms_symbol_bmt) %>%
+#   filter(hu_homology_type=="ortholog_one2one") %>%
+#   filter(hu_orthology_confidence==1)
+```
+
+
+
+
+# PLOT UMAPs
+
+```{r mouse}
+names(cols_chopp_ms[names(cols_chopp_ms)!="Bcell"]) %in% unique(seur_chopp_mouse@meta.data$cluster)
+seur_chopp_mouse@meta.data$cluster <- factor(
+  seur_chopp_mouse@meta.data$cluster,
+  levels=names(cols_chopp_ms[names(cols_chopp_ms)!="Bcell"])
+  )
+
+ggrastr::rasterise(
+  DimPlot(seur_chopp_mouse, group.by="cluster", cols=cols_chopp_ms),
+  layers="Point",
+  dpi=300
+  ) +
+  labs(title="Mouse")+
+  theme(
+    axis.ticks=element_blank(),
+    axis.text=element_blank(),
+    axis.line = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    axis.title=element_text(hjust=0)
+    )
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig1_umap_mouse.pdf", width=6, height=5)
+```
+
+```{r human}
+ggrastr::rasterise(
+  DimPlot(seur_chopp_human, group.by="cluster_figure", cols=cols_chopp_hu),
+  layers="Point",
+  dpi=300
+  ) +
+  labs(title="Human")+
+  theme(
+    axis.ticks=element_blank(),
+    axis.text=element_blank(),
+    axis.line = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    axis.title=element_text(hjust=0)
+    )
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig1_umap_human.pdf", width=6.5, height=5)
+```
+
+
+
+
+# RUN METANEIGHBOR
+
+## Prepare metadata
+```{r mtn-prep-metadata}
+# Mouse
+ms.metadata <- seur_chopp_mouse@meta.data %>%
+  dplyr::select(c(cluster, Genotype)) %>%
+  dplyr::rename(cluster_figure=cluster) %>%
+  mutate(species="mouse",
+         replicate=case_when(Genotype=="B2M" ~ "ms_B2M_KO",
+                             Genotype=="IIKO"~ "ms_H2Ab1_KO")) %>%
+  dplyr::select(-Genotype)
+
+# Human
+hu.metadata <- seur_chopp_human@meta.data %>%
+  dplyr::select(c(cluster_figure, orig.ident)) %>%
+  mutate(species="human",
+         replicate=paste0("hu_", orig.ident)) %>%
+  dplyr::select(-orig.ident)
+```
+
+
+## Prepare counts matrices
+Get counts matrices and add little prefix to cell barcodes because some are the same across species (and we don't want to confuse them).
+```{r mtn-prep-counts-1}
+# Get counts matrices
+ms.counts <- seur_chopp_mouse[["RNA"]]@counts
+hu.counts <- seur_chopp_human[["RNA"]]@counts
+
+# Check they have different cell barcodes
+table(colnames(ms.counts) %in% colnames(hu.counts), useNA="ifany")
+
+# They don't, so let's add a little prefix in counts matrices and metadata dataframes
+# table(rownames(ms.metadata) == colnames(ms.counts), useNA="ifany") # sanity check
+# table(rownames(hu.metadata) == colnames(hu.counts), useNA="ifany") # sanity check
+colnames(ms.counts) <- paste0("ms_", colnames(ms.counts))
+colnames(hu.counts) <- paste0("hu_", colnames(hu.counts))
+
+rownames(ms.metadata) <- paste0("ms_", rownames(ms.metadata))
+rownames(hu.metadata) <- paste0("hu_", rownames(hu.metadata))
+
+# table(colnames(ms.counts) %in% colnames(hu.counts), useNA="ifany") # sanity check
+```
+
+Then let's subset the orthologs dataframe to only genes we find in our human/mouse count matrices.
+```{r mtn-prep-counts-2}
+# First, check whether genes can all be found in the ortholog table. Note: many can't be found because
+# (1) I removed genes without orthologs;
+# (2) I removed genes with orthology confidence of 0;
+# (3) I kept only one2one orthologs
+table(unique(rownames(ms.counts)) %in% unique(ortholog.df$ms_symbol)) # 4,202 not
+table(unique(rownames(hu.counts)) %in% ortholog.df$hu_symbol) # 9,285 not
+
+
+# Subset the ortholog table to only genes that we can "translate"
+dictionary <- ortholog.df %>%
+  as_tibble() %>%
+  ## Intersection
+  filter(ms_symbol %in% unique(rownames(ms.counts)) & hu_symbol %in% unique(rownames(hu.counts))) %>%
+  ## Remove any symbols that are NAs
+  filter(!is.na(ms_symbol)) %>%
+  filter(!is.na(hu_symbol))
+dim(dictionary) # 10,763 genes
+```
+
+Now we'll translate mouse genes in mouse count matrix into "human" genes.
+```{r mtn-prep-counts-3}
+# sanity check how many genes in each count matrix is found in our "dictionary" (should be 10,763 based on previous code chunk)
+# table(unique(rownames(ms.counts)) %in% dictionary$ms_symbol) # 10,763
+# table(unique(rownames(hu.counts)) %in% dictionary$hu_symbol) # 10,763
+
+# Subset count matrices to only ms and hu genes that have 1:1 orthologs
+ms.counts <- ms.counts[rownames(ms.counts) %in% dictionary$ms_symbol,]
+hu.counts <- hu.counts[rownames(hu.counts) %in% dictionary$hu_symbol,]
+nrow(ms.counts)==nrow(hu.counts) # should be TRUE
+
+# Translate the mouse genes in count matrix into "human genes"
+ms.dict <- dictionary %>%
+  filter(ms_symbol %in% rownames(ms.counts)) %>%
+  select(ms_symbol, hu_symbol) %>%
+  distinct(ms_symbol, .keep_all=T)
+ms.dict <- ms.dict[match(rownames(ms.counts), ms.dict$ms_symbol),]
+table(ms.dict$ms_symbol == rownames(ms.counts), useNA="ifany") # should be all TRUE
+table(is.na(ms.dict$hu_symbol)) # should have no NAs
+
+# Translate
+rownames(ms.counts) <- ms.dict$hu_symbol
+```
+
+
+## Prepare HVGs
+```{r mtn-prep-hvg}
+# Mouse hvg
+ms.hvg <- VariableFeatures(FindVariableFeatures(seur_chopp_mouse, nfeatures=5000))
+length(ms.hvg)
+
+# Human hvg
+hu.hvg <- VariableFeatures(FindVariableFeatures(seur_chopp_human, nfeatures=5000))
+length(hu.hvg)
+
+
+# Translate the mouse HVGs into "human gene" language
+ms.hvg.translated <- pull(dictionary %>% filter(ms_symbol %in% ms.hvg), # not all ms HVGs are found in ortholog.df
+                          hu_symbol)
+hu.hvg.translated <- pull(dictionary %>% filter(hu_symbol %in% hu.hvg), # not all hu HVGs are found in ortholog.df
+                          hu_symbol)
+total.hvg <- unique(union(ms.hvg.translated, hu.hvg.translated))
+length(total.hvg) # 1,909 genes (if 2000 HVG each) / 4,549 genes (if 5000 HVGs each)
+table(total.hvg %in% unique(ms.hvg.translated), useNA="ifany") # 3,494 come from mouse (2,370 are mouse-specific)
+table(total.hvg %in% unique(hu.hvg.translated), useNA="ifany") # 2,179 come from human (1,055 are human-specific)
+```
+
+
+## Prepare SummarizedExperiment object
+```{r mtn-prep-se}
+# check metadata columns have same colnames
+head(ms.metadata)
+head(hu.metadata)
+
+# reorder ms and hu count matrices to have same gene order
+nrow(ms.counts)
+nrow(hu.counts)
+ms.counts <- ms.counts[rownames(hu.counts),]
+
+# last sanity checks
+table(rownames(ms.counts)==rownames(hu.counts), useNA="ifany") # all TRUE
+table(colnames(ms.counts) %in% colnames(hu.counts), useNA="ifany") # all FALSE
+table(colnames(ms.counts)==rownames(ms.metadata), useNA="ifany") # all TRUE
+table(colnames(hu.counts)==rownames(hu.metadata), useNA="ifany") # all TRUE
+
+# merge count matrices and metadata dataframes
+tot.counts   <- cbind(ms.counts, hu.counts)
+tot.metadata <- rbind(ms.metadata, hu.metadata)
+table(colnames(tot.counts)==rownames(tot.metadata), useNA="ifany") # all TRUE
+
+# create SummarizedExperiment object
+se <- SummarizedExperiment(assays=tot.counts, colData=tot.metadata)
+```
+
+
+## Run metaneighbor
+```{r mtn-run}
+mtn <- MetaNeighborUS(
+  var_genes = total.hvg,
+  dat = se,
+  study_id = se$species,
+  cell_type = se$cluster_figure,
+  fast_version = T
+)
+```
+
+Quick plot
+```{r mtn-heatmap, fig.height=10, fig.width=10}
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          # keysize = 1.2,
+          # text labels
+          main="Mouse vs Human Tconv (union: 4549 HVGs)",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9))
+```
+
+
+
+
+# PLOT METANEIGHBOR
+
+## Define functions
+```{r}
+plot_mtn <-
+  function(mtn_output,
+           var1 = "human",
+           var2 = "mouse",
+           var1_nbcells,
+           var2_nbcells,
+           var1_order,
+           var2_order,
+           bp_ymax = 20,
+           file_name="no",
+           figsize=12
+           ) {
+    
+  # REMODEL DATAFRAME
+  mtn.df <- melt(mtn_output) %>%
+    filter(str_detect(Var1,var1)) %>%
+    mutate(Var1 = gsub(paste0(var1, "\\|"), "", Var1)) %>%
+    filter(str_detect(Var2, var2)) %>%
+    mutate(Var2 = gsub(paste0(var2, "\\|"), "", Var2)) %>%
+    as_tibble() %>%
+    dplyr::rename(auroc=value) %>%
+    # add nb of cells for var1 and var2
+    left_join(var1_nbcells, by="Var1") %>%
+    left_join(var2_nbcells, by="Var2") %>%
+    # transform var1 and var2 into factors for ordering
+    mutate(Var1=factor(Var1, levels=var1_order),
+           Var2=factor(Var2, levels=var2_order))
+    
+    # PROPORTION OF VAR1 THYMOCYTES IN EACH CLUSTER
+    bp.x <-
+      ggplot(
+        data = mtn.df %>% select(Var1, propcells_var1) %>% distinct(),
+        aes(x = Var1, y = propcells_var1)
+      ) +
+      geom_bar(stat = "identity", fill = "#bdbdbd") + theme_cowplot() +
+      scale_x_discrete(position = "top") +
+      scale_y_continuous(limits = c(0, bp_ymax), breaks = c(0, 10, 20)) +
+      labs(y = "%cells") +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 0),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "none"
+      )
+    
+    # PROPORTION OF VAR2 THYMOCYTES IN EACH CLUSTER
+    bp.y <-
+      ggplot(
+        data = mtn.df %>% select(Var2, propcells_var2) %>% distinct(),
+        aes(x = Var2, y = propcells_var2)
+      ) +
+      geom_bar(stat = "identity", fill = "#bdbdbd") +
+      scale_x_discrete(position = "top") +
+      scale_y_continuous(limits = c(0, bp_ymax), breaks = c(0, 10, 20)) +
+      labs(y = "%cells") + coord_flip() + theme_cowplot() +
+      theme(
+        axis.title.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.y = element_blank(),
+        legend.position = "none"
+      )
+    
+    # BUBBLEPLOT
+    hm.clean <-
+      ggplot(mtn.df, aes(x = Var1, y = Var2)) +
+      geom_point(aes(size = abs(auroc-0.5), color = auroc)) +
+      geom_text(
+        data = mtn.df %>% filter(auroc > 0.8) %>% mutate(across("auroc", \(x) round(x, 2))),
+        aes(label = auroc),
+        color = "white"
+      ) +
+      scale_size_continuous(
+        limits = c(0, 0.5),
+        breaks = seq(0, 0.5, by = 0.1),
+        range = c(1, 15)
+      ) +
+      scale_color_gradient2(
+        low = "#2166ac",
+        mid = "white",
+        high = "#a50f15",
+        midpoint = 0.5,
+        limits = c(0, 1),
+        name = "AUROC",
+        breaks = seq(0, 1, by = 0.2)
+      ) +
+      labs(x = paste(var1, "clusters"), y = paste(var2, "clusters"), size = "AUROC") +
+      theme_cowplot() +
+      theme(
+        legend.position = "bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+    
+    # COMBINE
+    p <- (bp.x+plot_spacer() + plot_layout(widths = c(5, 1))) / (hm.clean + bp.y + plot_layout(widths = c(5, 1))) + plot_layout(heights = c(1, 5))
+    if(file_name!="no"){ggsave(paste0("./data/figures/chapter_04/figs_unfinished/section1/", file_name), plot=p, width=figsize, height=figsize)}
+    return(p)
+}
+
+# Get nb of cells in human and mouse clusters
+nbcells_hu <- as.data.frame(table(seur_chopp_human$cluster_figure)) %>%
+    dplyr::rename(ncells_var1=Freq) %>%
+    mutate(propcells_var1 = ncells_var1*100/dim(seur_chopp_human)[2]) 
+nbcells_ms <- as.data.frame(table(seur_chopp_mouse$cluster)) %>%
+    dplyr::rename(Var2=Var1, ncells_var2=Freq) %>%
+    mutate(propcells_var2 = ncells_var2*100/dim(seur_chopp_mouse)[2])
+
+# Define order of mouse and human clusters
+hu_levels <- levels(seur_chopp_human@meta.data$cluster_figure)[levels(seur_chopp_human@meta.data$cluster_figure)!="hs-Bcell"]
+ms_levels <- names(cols_chopp_ms)[names(cols_chopp_ms)!="Bcell"]
+```
+
+
+## Mouse x Human
+```{r mtn-plot-ms-hu, fig.height=10, fig.width=10}
+p_ms_hu <- plot_mtn(
+  mtn_output = mtn,
+  var1="human",
+  var2="mouse",
+  var1_nbcells=nbcells_hu,
+  var2_nbcells = nbcells_ms,
+  var1_order = hu_levels,
+  var2_order= rev(ms_levels),
+  file_name="ch4_fig1_tconv_mtn_5000hvg.pdf"
+)
+p_ms_hu
+```
+
+
+## Mouse x Mouse
+```{r mtn-plot-ms-ms, fig.height=10, fig.width=10}
+p_ms_ms <- plot_mtn(
+  mtn_output = mtn,
+  var1="mouse",
+  var2="mouse",
+  var1_nbcells=nbcells_ms %>% dplyr::rename(Var1=Var2, ncells_var1=ncells_var2, propcells_var1=propcells_var2),
+  var2_nbcells = nbcells_ms,
+  var1_order = ms_levels,
+  var2_order= rev(ms_levels),
+  file_name="ch4_fig1_tconv_mtn_5000hvg_ms_ms.pdf"
+)
+p_ms_ms
+```
+
+
+## Human x Human
+```{r mtn-plot-hu-hu, fig.height=10, fig.width=10}
+p_hu_hu <- plot_mtn(
+  mtn_output = mtn,
+  var1="human",
+  var2="human",
+  var1_nbcells=nbcells_hu,
+  var2_nbcells = nbcells_hu %>% dplyr::rename(Var2=Var1, ncells_var2=ncells_var1, propcells_var2=propcells_var1),
+  var1_order = hu_levels,
+  var2_order= rev(hu_levels),
+  file_name="ch4_fig1_tconv_mtn_5000hvg_hu_hu.pdf",
+  figsize=14
+)
+p_hu_hu
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
