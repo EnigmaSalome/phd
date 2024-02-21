@@ -1,5 +1,5 @@
 ---
-title: "Chapter X - R Notebook"
+title: "Chapter 4 - Human Mouse orthologs"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -9,6 +9,7 @@ output:
     number_sections: true
 
 ---
+This notebook will generate a dataframe with human - mouse ortholog genes.
 
 ```{r, setup, include=FALSE}
 knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
