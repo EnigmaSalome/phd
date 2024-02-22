@@ -63,6 +63,7 @@ ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_
 
 # PLOT UMAPs
 
+## Clusters on UMAPs
 ```{r mouse}
 names(cols_chopp_ms[names(cols_chopp_ms)!="Bcell"]) %in% unique(seur_chopp_mouse@meta.data$cluster)
 seur_chopp_mouse@meta.data$cluster <- factor(
@@ -102,6 +103,107 @@ ggrastr::rasterise(
     )
 # ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig1_umap_human.pdf", width=6.5, height=5)
 ```
+
+
+## Gene signatures on UMAPs
+Calculate gene signatures on human Chopp et al. data.
+```{r gene-signatures}
+# Get Park et al. gene signatures
+park_markergenes <- read.csv("./data/litterature_gene_signatures/park_genesignatures.csv", row.names=1)
+park_gene_signatures <- c(
+  "DNp",
+  "DNq",
+  "DPp",
+  "DPq",
+  "abT_entry",
+  "CD4T",
+  "CD8T",
+  "CD8aa1",
+  "CD8aa2",
+  "gdT",
+  "T_agonist",
+  "Treg_diff",
+  "Treg",
+  "NKT",
+  "Th17"
+)
+park_gene_signatures_list <- as.list(park_markergenes[,park_gene_signatures])
+names(park_gene_signatures_list) <- paste0("park_", names(park_gene_signatures_list))
+
+# # Get Chopp et al. gene signatures
+# chopp_signatures <- read.csv("~/Projects/phd/data/litterature_gene_signatures/chopp_gene_signatures.csv")
+# chopp_gene_signatures_list <- as.list(chopp_signatures)
+# names(chopp_gene_signatures_list) <- paste0("chopp_", names(chopp_gene_signatures_list))
+
+# Personally curated gene signatures from litterature (already scored in integrated seurat object)
+perso_gene_signatures <- list(
+  "effector"=c("HOPX", "GZMB", "NKG7", "TBX21", "PRF1", "GZMA", "KLRD1", "EOMES", "CCR6", "RORC", "JUNB", "FOS", "RORA", "FOSB"),
+  "naive"   =c("SATB1", "TCF7", "LEF1", "CCR7", "SELL", "FOXP1", "KLF2", "SOX4", "ID3", "BACH2"),
+  "egress"  =c("KLF2", "CORO1A", "CCR7", "CXCR4", "CXCR6", "FOXO1", "CXCR3", "S1PR1", "S1PR4", "S100A4", "S100A6", "EMP3") # from Sanchez Sanchez
+  )
+
+
+# Combined gene lists
+gene_signatures_list <- c(park_gene_signatures_list, perso_gene_signatures)
+gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x!=""]) # remove empty genes
+gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x %in% rownames(seur_chopp_human)]) # remove genes not found in chopp data
+lapply(gene_signatures_list, function(x) length(x)) # sanity check (between 0-2 genes per signature lost)
+
+
+# add module score to integrated object (better for choice of control genes)
+seur_chopp_human <- AddModuleScore(
+  object = seur_chopp_human,
+  assay = "RNA",
+  features = gene_signatures_list,
+  name=names(gene_signatures_list),
+  seed=1
+  )
+colnames(seur_chopp_human@meta.data)[11:28] <- names(gene_signatures_list)
+```
+
+Plot on UMAPs
+```{r gene-signatures-plot, fig.height=5, fig.width=5}
+do_FeaturePlot(
+  seur_chopp_human,
+  features="egress",
+  use_viridis = T,
+  viridis.palette = "E",
+  order=T,
+  min.cutoff=0
+)
+```
+
+Plot as DotPlot
+```{r gene-signatures-dotplot, fig.height=8}
+do_DotPlot(
+  seur_chopp_human,
+  group.by="cluster_figure",
+  features=colnames(seur_chopp_human@meta.data)[11:28],
+  scale=F
+)
+```
+
+Check expression of genes of interest in mouse data.
+```{r, fig.height=7, fig.width=5}
+do_DotPlot(
+  seur_chopp_mouse,
+  group.by="cluster",
+  features=c(
+    "Rag1", "Dntt", "Cd4", "Cd8a", "Cd8b1",
+    "Ccr9",
+    "Ccr7",
+    "Zbtb16",
+    "Il2rb", "Tbx21", "Ifng", "Gzmk", "Rorc", "Rora", "Ccr6", "Il17rb"
+  ),
+  flip=T,
+  use_viridis = T,
+  viridis.palette="B"
+)
+
+grep("Ceb", rownames(seur_chopp_mouse), value=T)
+```
+
+
 
 
 
