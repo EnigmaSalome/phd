@@ -183,28 +183,6 @@ do_DotPlot(
 )
 ```
 
-Check expression of genes of interest in mouse data.
-```{r, fig.height=7, fig.width=5}
-do_DotPlot(
-  seur_chopp_mouse,
-  group.by="cluster",
-  features=c(
-    "Rag1", "Dntt", "Cd4", "Cd8a", "Cd8b1",
-    "Ccr9",
-    "Ccr7",
-    "Zbtb16",
-    "Il2rb", "Tbx21", "Ifng", "Gzmk", "Rorc", "Rora", "Ccr6", "Il17rb"
-  ),
-  flip=T,
-  use_viridis = T,
-  viridis.palette="B"
-)
-
-grep("Ceb", rownames(seur_chopp_mouse), value=T)
-```
-
-
-
 
 
 
@@ -500,8 +478,48 @@ nbcells_ms <- as.data.frame(table(seur_chopp_mouse$cluster)) %>%
     mutate(propcells_var2 = ncells_var2*100/dim(seur_chopp_mouse)[2])
 
 # Define order of mouse and human clusters
-hu_levels <- levels(seur_chopp_human@meta.data$cluster_figure)[levels(seur_chopp_human@meta.data$cluster_figure)!="hs-Bcell"]
-ms_levels <- names(cols_chopp_ms)[names(cols_chopp_ms)!="Bcell"]
+# hu_levels <- levels(seur_chopp_human@meta.data$cluster_figure)[levels(seur_chopp_human@meta.data$cluster_figure)!="hs-Bcell"]
+hu_levels <- c(
+  "hs-ISP",
+  "hs-DP1",
+  "hs-DP2",
+  "hs-DP3",
+  "hs-Sig1",
+  "hs-Sig4",
+  "hs-Sig2",
+  "hs-Sig3",
+  "hs-PreTreg",
+  "hs-Treg",
+  "hs-Treg2",
+  "hs-ImCD4",
+  "hs-MatCD4",
+  "hs-ISC",
+  "hs-ImCD8",
+  "hs-CD8",
+  "hs-MatCD8",
+  "hs-Mix",
+  "hs-NC1",
+  "hs-Unk"
+)
+# ms_levels <- names(cols_chopp_ms)[names(cols_chopp_ms)!="Bcell"]
+ms_levels <- c(
+  "DP-1",
+  "DP-2 ",
+  "Sig-1",
+  "Sig-2",
+  "Sig-3",
+  "Sig-4",
+  "Sig-5a",
+  "Sig-5b",
+  "Treg",
+  "ImCD4",
+  "MatCD4",
+  "ISC CD4",
+  "ImCD8",
+  "MatCD8",
+  "NC-1",
+  "NC-2"
+)
 ```
 
 
@@ -511,10 +529,11 @@ p_ms_hu <- plot_mtn(
   mtn_output = mtn,
   var1="human",
   var2="mouse",
-  var1_nbcells=nbcells_hu,
+  var1_nbcells = nbcells_hu,
   var2_nbcells = nbcells_ms,
   var1_order = hu_levels,
   var2_order= rev(ms_levels),
+  # file_name="no"
   file_name="ch4_fig1_tconv_mtn_5000hvg.pdf"
 )
 p_ms_hu
@@ -551,6 +570,174 @@ p_hu_hu <- plot_mtn(
   figsize=14
 )
 p_hu_hu
+```
+
+
+
+
+# PLOT MARKER GENES
+
+## Marker genes
+```{r}
+# Mouse
+marker_genes_ms <- c(
+  # DP
+  "Rag1",
+  "Dntt",
+  "Cd4",
+  "Cd8a",
+  "Cd8b1",
+  # SP entry
+  "Ccr9",
+  "Tox",
+  "Lef1",
+  # TCR induced
+  "Cd69",
+  "Cd5",
+  "Ikzf2",
+  "Id3",
+  # CD8aa1 (IELpA)
+  "Gng4",
+  "Nr4a3",
+  "Tnfrsf9",
+  "Pdcd1",
+  "Hivep3",
+  # CD8aa2 (IELpB?)
+  # "Znf683",
+  "Xcl1",
+  "Il2rb",
+  # Tagonist
+  "Bcl2l11",
+  "Nr4a1",
+  # Treg
+  "Foxp3",
+  "Ctla4",
+  "Il2ra",
+  "Tnfrsf18",
+  "Tnfrsf4",
+  # CD4 SP
+  "Zbtb7b",
+  "Cd40lg",
+  # "Bcl11b",
+  # "Satb1",
+  # "Tcf7",
+  # CD8 SP
+  "Runx3",
+  "Plac8",
+  # Maturation & exit
+  "Ccr7",
+  "Klf2",
+  "S1pr1",
+  # "Sell",
+  # "Il7r",
+  # NC type 1
+  "Zbtb16",
+  "Tbx21",
+  "Ifng",
+  "Gzmk",
+  # NC type 17
+  "Rorc",
+  "Rora",
+  "Il17rb"
+)
+
+# Human
+marker_genes_hu <- c(
+  # DP
+  "RAG1",
+  "DNTT",
+  "CD4",
+  "CD8A",
+  "CD8B",
+  # SP entry
+  "CCR9",
+  "TOX",
+  "LEF1",
+  # TCR induced
+  "CD69",
+  "CD5",
+  "IKZF2",
+  "ID3",
+  # CD8aa1
+  "GNG4",
+  "NR4A3",
+  "TNFRSF9",
+  "PDCD1",
+  "HIVEP3",
+  # CD8aa2
+  "ZNF683",
+  "XCL1",
+  "IL2RB",
+  # T agonist
+  "BCL2L11",
+  "NR4A1",
+  # Treg
+  "FOXP3",
+  "CTLA4",
+  "IL2RA",
+  "TNFRSF18",
+  "TNFRSF4",
+  # CD4 SP
+  "ZBTB7B",
+  "CD40LG",
+  # "BCL11B",
+  # "SATB1",
+  # "TCF7",
+  # CD8 SP
+  "RUNX3",
+  "PLAC8",
+  "LINC02446",
+  # Maturation & exit
+  "CCR7",
+  "KLF2",
+  "S1PR1",
+  # "SELL",
+  # "IL7R",
+  # NC
+  "ZBTB16",
+  "TBX21",
+  "IFNG",
+  "GZMK",
+  "RORC",
+  "RORA",
+  "IL17RB"
+)
+
+
+length(marker_genes_ms)==length(marker_genes_hu)
+```
+
+
+## Mouse
+```{r, fig.height=8, fig.width=5}
+seur_chopp_mouse$cluster <- factor(seur_chopp_mouse$cluster, levels=ms_levels)
+
+do_DotPlot(
+  seur_chopp_mouse,
+  group.by="cluster",
+  features=marker_genes_ms,
+  flip=T,
+  use_viridis = T,
+  viridis.palette="B"
+)+
+  theme(axis.text.y=element_text(face="italic"))
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig1_dotplot_mouse.pdf", width=5, height=9)
+```
+
+## Human
+```{r, fig.height=7, fig.width=5}
+seur_chopp_human$cluster_figure <- factor(seur_chopp_human$cluster_figure, levels=hu_levels)
+
+do_DotPlot(
+  seur_chopp_human,
+  group.by="cluster_figure",
+  features=marker_genes_hu,
+  flip=T,
+  use_viridis = T,
+  viridis.palette="B"
+)+
+  theme(axis.text.y=element_text(face="italic"))
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig1_dotplot_human.pdf", width=6, height=9)
 ```
 
 
