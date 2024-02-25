@@ -1,0 +1,123 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(harmony)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01_with_parkchopp_signatures.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# Figure 4
+
+## Expected genes expressed by agonist-selected thymocytes (CD8aa & Treg)
+```{r fig4_keygenes, fig.width=5, fig.height=5}
+genes_to_plot <- c("GNG4", "ZNF683", "FOXP3", "CTLA4")
+
+for(gene in genes_to_plot){
+  print(gene)
+  p <- do_FeaturePlot(
+    sample = seur_integrated,
+    slot="data",
+    cells.highlight=rownames(seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus"),]),
+    features = gene,
+    use_viridis=T,
+    viridis.palette = "B",
+    legend.position="right",
+    order=T,
+    pt.size=1
+    # raster=T,
+    # raster.dpi = 2048
+  )
+  print(p)
+  # ggsave(paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig4_", gene, ".jpeg"),
+  #        plot=p,
+  #        width=8, height=7) # better in .jpeg than in .pdf where the raster is blurry
+}
+```
+
+
+## Park et al. gene signatures
+```{r fig4_parksignatures, fig.width=6, fig.height=5}
+# # Get Park et al. gene signatures
+# park_markergenes <- read.csv("~/Projects/phd/data/litterature_gene_signatures/park_genesignatures.csv", row.names=1)
+# 
+# # add module score
+# gene_signatures <- c("CD8aa1", "CD8aa2", "Treg", "Treg_diff", "T_agonist")
+# gene_signatures_list <- as.list(park_markergenes[,gene_signatures])
+# seur_integrated <- AddModuleScore(object = seur_integrated, assay = "RNA",
+#                                   features = gene_signatures_list, name=gene_signatures)
+# colnames(seur_integrated@meta.data)[32:36] <- gene_signatures
+
+# plot
+gene_signatures_to_plot <- c("park_T_agonist", "park_CD8aa1", "park_CD8aa2", "park_Treg_diff", "park_Treg")
+for(sig in gene_signatures_to_plot){
+  print(sig)
+  p <- do_FeaturePlot(
+    sample = seur_integrated,
+    slot="data",
+    cells.highlight=rownames(seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus"),]),
+    features = sig,
+    min.cutoff = 0,
+    use_viridis=T,
+    viridis.palette = "E", #E, G
+    legend.position="right",
+    order=T,
+    pt.size=1
+  )
+  print(p)
+  # ggsave(paste0("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig4_park_", sig, ".jpeg"),
+  #        plot=p,
+  #        width=8, height=7) # better in .jpeg than in .pdf where the raster is blurry
+}
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
