@@ -1,0 +1,74 @@
+---
+title: "Chapter 2 - Figure 2"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(harmony)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+```
+
+
+
+
+# FIGURE 2
+Show the cells colored by tissue. Split by tissue to show overlap.
+```{r fig2, fig.width=5, fig.height=5}
+# order thymus first
+seur_integrated@meta.data$tissue <- factor(seur_integrated@meta.data$tissue, levels=c("Thymus", "PBMC"))
+
+do_DimPlot(
+  seur_integrated,
+  group.by="tissue",
+  split.by="tissue",
+  colors.use=cols_tissue,
+  shuffle=T,
+  order=NULL,
+  pt.size=4,
+  border.size=2,
+  raster=T,
+  raster.dpi = 2048
+  )
+# ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig2_bis.jpeg", width=12, height=5)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+

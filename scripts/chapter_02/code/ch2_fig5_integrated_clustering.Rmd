@@ -1,5 +1,5 @@
 ---
-title: "Chapter 2 - Figure 2"
+title: "Chapter 2 - Integrated clustering"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -17,16 +17,18 @@ knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
 ```
 
 
+
+
 # IMPORT
 
 ## Import librairies
 ```{r import-librairies}
 library(ggplot2)
+library(RColorBrewer)
 library(cowplot)
 library(tidyverse)
 library(dplyr)
 library(Seurat)
-library(harmony)
 library(SCpubr)
 library(patchwork)
 
@@ -42,31 +44,18 @@ DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
 
 
 
-# FIGURES
-## Figure 2: integrated data by tissue
-Show the cells colored by tissue. Split by tissue to show overlap.
-```{r fig2, fig.width=5, fig.height=5}
-# order thymus first
-seur_integrated@meta.data$tissue <- factor(seur_integrated@meta.data$tissue, levels=c("Thymus", "PBMC"))
+# FUNCTIONS
+```{r define-functions}
 
-do_DimPlot(
-  seur_integrated,
-  group.by="tissue",
-  split.by="tissue",
-  colors.use=cols_tissue,
-  shuffle=T,
-  order=NULL,
-  pt.size=4,
-  border.size=2,
-  raster=T,
-  raster.dpi = 2048
-  )
-# ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig2_bis.jpeg", width=12, height=5)
 ```
 
 
 
-## Figure 5: integrated clustering
+
+
+## FIGURE 5
+
+## Integrated clustering
 ```{r fig5_clusters, fig.width=5, fig.height=5}
 # All data
 do_DimPlot(
@@ -82,6 +71,8 @@ do_DimPlot(
 # ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_clusters.pdf", width=6, height=6)
 ```
 
+
+## Integrated clustering separated by tissue
 ```{r fig5_clusters_by_tissue, fig.width=20, fig.height=5}
 # Highlight thymocytes
 do_DimPlot(
@@ -97,6 +88,8 @@ do_DimPlot(
 # ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_clusters_by_tissue.pdf", width=18, height=6)
 ```
 
+
+## Dotplot genes of interest
 ```{r fig5_markergenes, fig.height=10, fig.width=8}
 # Supp Fig 3A, but only on thymocytes
 thymocytes_cellid <- rownames(seur_integrated@meta.data[seur_integrated@meta.data$tissue=="Thymus",])
@@ -151,7 +144,29 @@ fig5_p2 <- seur_integrated@meta.data %>%
 fig5_p2 / fig5_p1 + plot_layout(heights = c(1, 4))
 # ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_markergenes.pdf", width=8, height=10)
 ```
+Dotplot horizontal
+```{r fig5_markergenes2, fig.height=5, fig.width=10}
+# DotPlot
+do_DotPlot(
+  sample=seur_integrated[,thymocytes_cellid],
+  features=genes_dotplot,
+  group.by = "clusters_integrated_data",
+  legend.position = "right",
+  use_viridis = T,
+  viridis.palette = "B",
+  flip=F
+  )+
+  # coord_flip()+
+  theme(axis.text.y=element_text(angle=0, hjust=0.5),
+        axis.text.x=element_text(face="italic"))
 
+# Save
+ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_markergenes2.pdf", width=12, height=5)
+```
+
+
+
+## Tissue distribution by cluster
 ```{r fig5_tissue_distribution}
 seur_integrated@meta.data %>%
   as_data_frame() %>%
@@ -166,14 +181,6 @@ seur_integrated@meta.data %>%
   labs(x="Clusters", y="Frequency")
 # ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_tissue_distribution.pdf", width=7, height=4)
 ```
-
-
-
-
-
-
-
-
 
 
 

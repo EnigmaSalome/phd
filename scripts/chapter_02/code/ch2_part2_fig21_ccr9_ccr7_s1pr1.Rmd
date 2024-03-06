@@ -59,6 +59,13 @@ seur_thym_ms <- list(
 )
 ```
 
+```{r}
+DotPlot(
+  seur_thym_ms$nkt,
+  features=c("Fos", "Jun", "Junb")
+)
+```
+
 
 
 
