@@ -1,0 +1,100 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+seur_pbmc_mait <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_mait_clean.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# ANALYSIS
+
+## Analysis 1
+```{r analysis-1}
+DimPlot(seur_pbmc_mait, group.by="clusters_per_lineage", cols = cols_pbmc_mait)
+FeaturePlot(seur_pbmc_mait, features=c("NCAM1", "PDCD1", "CD27", "CD69"), order=T)
+DotPlot(seur_pbmc_mait, group.by="clusters_per_lineage", features=c("NCAM1", "PDCD1", "CD27", "CD69", "GNLY", "PRF1"), dot.scale=10)
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
