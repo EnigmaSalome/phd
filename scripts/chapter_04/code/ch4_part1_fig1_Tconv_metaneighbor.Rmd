@@ -41,7 +41,7 @@ source("~/Projects/phd/scripts/colors_universal.R")
 
 ## Import data
 ```{r import-data}
-# Seurat tables
+# Seurat objects
 seur_chopp_human <- readRDS("./data/seurat_objects/chopp2020/HumanThymusChoppEtAl2020.rds")
 seur_chopp_human@meta.data$cluster_figure <- Idents(seur_chopp_human)
 seur_chopp_mouse <- readRDS("./data/seurat_objects/chopp2020/MouseThymusChoppEtAl2020.rds")
