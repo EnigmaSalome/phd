@@ -1,0 +1,344 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+# Seurat objects
+seur_hu_thym <- list(
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_nkt_with_gene_signatures.rds"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_mait_with_gene_signatures.rds"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_gdt_with_gene_signatures.rds")
+)
+
+seur_ms_thym <- list(
+  "nkt"=readRDS("./data/seurat_objects/harshakrovi2020/ms_nkt_seurobj.rds"),
+  "mait"=readRDS("./data/seurat_objects/legoux2019/ms_mait_seurobj.rds"),
+  "gdt"=readRDS("./data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+)
+
+# Orthologs table
+ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_one2one.csv")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
+  p <- ggrastr::rasterise(
+    do_FeaturePlot(
+    seuratobj,
+    features = genesignature,
+    min.cutoff=0,
+    use_viridis = T,
+    viridis.palette = "E",
+    legend.position="right",
+    order=T,
+    pt.size = 1.5,
+    raster=F
+    # raster.dpi=2048,
+    # pt.size=10
+  ),
+  layers="Point",
+  dpi=300
+  )
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_04/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=9, height=6)
+  }
+}
+```
+
+
+
+
+# MAIT FIGURE
+
+## MAIT UMAPs
+```{r mait-umap-mouse}
+seur_ms_thym$mait$cell_type <- factor(seur_ms_thym$mait$cell_type, levels=c(
+  "MAIT0",
+  "Cluster 7",
+  "CyclingS",
+  "CyclingG2M",
+  "MAIT17a",
+  "MAIT17b",
+  "MAIT1"
+))
+
+ggrastr::rasterise(
+  DimPlot(seur_ms_thym$mait, group.by="cell_type", cols=cols_legoux_ms),
+  layers="Point",
+  dpi=300
+  ) +
+  labs(title="Mouse")+
+  theme(
+    axis.ticks=element_blank(),
+    axis.text=element_blank(),
+    axis.line = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    axis.title=element_text(hjust=0)
+    )
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig3_mait_umap_mouse.pdf", width=6, height=5)
+```
+
+```{r mait-umap-human}
+ggrastr::rasterise(
+  DimPlot(seur_hu_thym$mait, group.by="clusters_per_lineage", cols=cols_thym_mait),
+  layers="Point",
+  dpi=300
+  ) +
+  labs(title="Human")+
+  theme(
+    axis.ticks=element_blank(),
+    axis.text=element_blank(),
+    axis.line = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    axis.title=element_text(hjust=0)
+    )
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig3_mait_umap_human.pdf", width=6.5, height=5)
+```
+
+
+## MAIT stages DotPlot
+```{r mait-stages-dotplot}
+# Mouse
+do_DotPlot(
+  seur_ms_thym$mait,
+  group.by="cell_type",
+  features=c("Cd4", "Cd8a", "Cd8b1", "Cd24a", "Cd44", "Cd27", "Klrb1", "Il18r1"),
+  flip=T,
+  use_viridis = T,
+  viridis.palette="B"
+)+
+  theme(axis.text.y=element_text(face="italic"))
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig4_mait_stages_dotplot_mouse.pdf", width=4, height=5)
+
+# Human
+do_DotPlot(
+  seur_hu_thym$mait,
+  group.by="clusters_per_lineage",
+  features=c("CD4", "CD8A", "CD8B", "CD24", "CD44", "CD27", "KLRB1", "IL18R1"),
+  flip=T,
+  use_viridis = T,
+  viridis.palette="B"
+)+
+  theme(axis.text.y=element_text(face="italic"))
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig4_mait_stages_dotplot_human.pdf", width=4, height=5)
+```
+
+
+## MAIT functional stages DotPlot
+Here we select genes that define each mouse cluster based on [Legoux et al. 2019](https://www.nature.com/articles/s41590-019-0465-3). These are not "marker genes" _per se_, as we didn't obtain them by computing the most DE genes in each cluster. Instead we selected the genes highlighted in the literature as defining each MAIT developmental stage (Legoux et al., Koay et al., etc.).
+```{r mait-marker-genes1}
+marker_genes_mait_ms <- c(
+  # DP & positive selection (TCR induced genes)
+  "Dntt",
+  "Cd24a",
+  "Cd69",
+  "Egr2",
+  "Hivep3",
+  # Immature
+  "Cd4",
+  "Ccr9",
+  "Sell",
+  "Ccr7",
+  "Lef1",
+  "Slamf6",
+  # Maturation
+  "Zbtb16",
+  "Cd44",
+  # Prolif
+  "Cdk1",
+  "Mki67",
+  # MAIT17
+  "Rorc",
+  "Rora",
+  "Il17re",
+  "Ccr6",
+  # "Sdc1",
+  # MAIT1
+  "Tbx21",
+  "Eomes",
+  "Cxcr3",
+  "Klrd1",
+  "Ifng",
+  "Prf1",
+  "Slamf7",
+  # "Ly6c1", "Ly6c2",
+  # Exit
+  "Klf2",
+  "S1pr1"
+)
+
+marker_genes_mait_hu <- c(
+  # DP & positive selection (TCR induced genes)
+  "RAG1",
+  "CD24",
+  "CD69",
+  "EGR2",
+  "HIVEP3",
+  # Immature
+  "CD4",
+  "CCR9",
+  "SELL",
+  "CCR7",
+  "LEF1",
+  "SLAMF6",
+  # Maturation
+  "ZBTB16",
+  "CD44",
+  # Prolif
+  "CDK1",
+  "MKI67",
+  # MAIT17
+  "RORC",
+  "RORA",
+  "IL17RE",
+  "CCR6",
+  # "SDC1",
+  # MAIT1
+  "TBX21",
+  "EOMES",
+  "CXCR3",
+  "KLRD1",
+  "IFNG",
+  "PRF1",
+  "SLAMF7",
+  # "LY6H", "LY6S",
+  # Exit
+  "KLF2",
+  "S1PR1"
+)
+
+
+```
+
+```{r mait-marker-genes2, fig.height=8, fig.width=4}
+do_DotPlot(
+  seur_ms_thym$mait,
+  group.by="cell_type",
+  features=marker_genes_mait_ms,
+  flip=T,
+  use_viridis = T,
+  viridis.palette="B"
+)+
+  theme(axis.text.y=element_text(face="italic"))
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig4_mait_stages_bigdotplot_mouse.pdf", width=4, height=7)
+
+do_DotPlot(
+  seur_hu_thym$mait,
+  group.by="clusters_per_lineage",
+  features=marker_genes_mait_hu,
+  flip=T,
+  use_viridis = T,
+  viridis.palette="B"
+)+
+  theme(axis.text.y=element_text(face="italic"))
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig4_mait_stages_bigdotplot_human.pdf", width=4, height=7)
+```
+
+```{r}
+FeaturePlot(seur_hu_thym$mait, features="CCR9")
+```
+
+
+
+## MAIT gene signature
+```{r mait-gene-signatures-mouse, fig.height=8, fig.width=8}
+legoux_gene_signature <- read.csv("./data/litterature_gene_signatures/mouse_tinn_signatures_combined.csv")[,1:2]
+legoux_gene_signature_list <- as.list(legoux_gene_signature)
+legoux_gene_signature_list <- lapply(legoux_gene_signature_list, function(x) x[x!=""]) # remove empty genes
+legoux_gene_signature_list <- lapply(legoux_gene_signature_list, function(x) x[x %in% rownames(seur_ms_thym$mait)]) # remove genes not found in our data
+lapply(legoux_gene_signature_list, function(x) length(x)) # sanity check (between 0-5 genes per signature lost)
+
+seur_ms_thym$mait <- AddModuleScore(
+  object = seur_ms_thym$mait,
+  assay = "RNA",
+  features = legoux_gene_signature_list,
+  name=names(legoux_gene_signature_list),
+  seed=1
+  )
+colnames(seur_ms_thym$mait@meta.data)[10:11] <- names(legoux_gene_signature_list)
+
+# Plot and save
+lineage_genesignature(
+  seuratobj = seur_ms_thym$mait,
+  # file_name = "ch4_fig3_mait_signatureMAIT1_mouse.pdf",
+  genesignature = "legoux_mait1_thymus"
+  )
+lineage_genesignature(
+  seuratobj = seur_ms_thym$mait,
+  # file_name = "ch4_fig3_mait_signatureMAIT17_mouse.pdf",
+  genesignature = "legoux_mait17_thymus"
+)
+```
+
+```{r mait-gene-signatures-human, fig.height=8, fig.width=8}
+# check how many genes in gene signature we can find in ortholog table
+lapply(legoux_gene_signature_list, function(x) table(x %in% ortholog.df$ms_symbol, useNA="ifany"))
+
+# More than 80% of genes in gene signatures can be found in ortholog table, so let's translate them
+legoux_gene_signature_list_humangenes <- lapply(legoux_gene_signature_list, function(x) ortholog.df %>% filter(ms_symbol %in% x) %>% pull(hu_symbol))
+legoux_gene_signature_list_humangenes <- lapply(legoux_gene_signature_list_humangenes, function(x) x[x %in% rownames(seur_hu_thym$mait)]) # remove genes not found in our data
+lapply(legoux_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 8-16 genes per signature lost, but still >90 genes per signature left)
+
+seur_hu_thym$mait <- AddModuleScore(
+  object = seur_hu_thym$mait,
+  assay = "RNA",
+  features = legoux_gene_signature_list_humangenes,
+  name=names(legoux_gene_signature_list_humangenes),
+  seed=1
+  )
+colnames(seur_hu_thym$mait@meta.data)[49:50] <- names(legoux_gene_signature_list_humangenes)
+
+# Plot and save
+lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait1_thymus", file_name = "ch4_fig3_mait_signatureMAIT1_human.pdf")
+lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait17_thymus", file_name = "ch4_fig3_mait_signatureMAIT17_human.pdf")
+```
+
+
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
