@@ -49,7 +49,7 @@ seur_ms_thym <- list(
 )
 
 # Orthologs table
-ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_one2one.csv")
+ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_full.csv")
 ```
 
 
@@ -194,7 +194,7 @@ seur_ms_thym$gdt <- AddModuleScore(
   name=names(lee_gene_signature_list),
   seed=1
   )
-colnames(seur_ms_thym$gdt@meta.data)[6:7] <- names(lee_gene_signature_list)
+colnames(seur_ms_thym$gdt@meta.data)[17:18] <- names(lee_gene_signature_list)
 
 # Plot and save
 lineage_genesignature(
@@ -211,25 +211,33 @@ lineage_genesignature(
 
 ```{r mait-gene-signatures-human, fig.height=8, fig.width=8}
 # check how many genes in gene signature we can find in ortholog table
-lapply(lee_gene_signature_list, function(x) table(x %in% ortholog.df$ms_symbol, useNA="ifany"))
+lapply(lee_gene_signature_list, function(x) table(x %in% ortholog.df$ms_ensemblID, useNA="ifany"))
 
 # More than 80% of genes in gene signatures can be found in ortholog table, so let's translate them
-lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list, function(x) ortholog.df %>% filter(ms_symbol %in% x) %>% pull(hu_symbol))
-lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list_humangenes, function(x) x[x %in% rownames(seur_hu_thym$mait)]) # remove genes not found in our data
-lapply(lee_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 8-16 genes per signature lost, but still >90 genes per signature left)
+lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list, function(x) ortholog.df %>% filter(ms_ensemblID %in% x) %>% pull(hu_symbol))
+lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list_humangenes, function(x) unique(x[x %in% rownames(seur_hu_thym$gdt)])) # remove genes not found in our data, and make sure to have unique genes
+lapply(lee_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 10-13 genes per signature lost, but still >100 genes per signature left)
 
-seur_hu_thym$mait <- AddModuleScore(
-  object = seur_hu_thym$mait,
+seur_hu_thym$gdt <- AddModuleScore(
+  object = seur_hu_thym$gdt,
   assay = "RNA",
   features = lee_gene_signature_list_humangenes,
   name=names(lee_gene_signature_list_humangenes),
   seed=1
   )
-colnames(seur_hu_thym$mait@meta.data)[49:50] <- names(lee_gene_signature_list_humangenes)
+colnames(seur_hu_thym$gdt@meta.data)[49:50] <- names(lee_gene_signature_list_humangenes)
 
 # Plot and save
-lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait1_thymus", file_name = "ch4_fig3_mait_signatureMAIT1_human.pdf")
-lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait17_thymus", file_name = "ch4_fig3_mait_signatureMAIT17_human.pdf")
+lineage_genesignature(
+  seuratobj = seur_hu_thym$gdt,
+  # file_name = "ch4_fig5_gdt_signatureGDT1_human.pdf",
+  genesignature = "lee_gdt1_thymus"
+)
+lineage_genesignature(
+  seuratobj = seur_hu_thym$gdt,
+  # file_name = "ch4_fig5_gdt_signatureGDT17_human.pdf",
+  genesignature = "lee_gdt17_thymus"
+)
 ```
 
 
