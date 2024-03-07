@@ -1,5 +1,5 @@
 ---
-title: "Chapter X - R Notebook"
+title: "Chapter 4 - Cross-species MAIT"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -75,6 +75,7 @@ lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
   layers="Point",
   dpi=300
   )
+  print(p)
   if(file_name != "no"){
     ggsave(paste0("~/Projects/phd/data/figures/chapter_04/figs_unfinished/section1/", file_name),
            plot=p,
@@ -270,10 +271,6 @@ do_DotPlot(
 )+
   theme(axis.text.y=element_text(face="italic"))
 # ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig4_mait_stages_bigdotplot_human.pdf", width=4, height=7)
-```
-
-```{r}
-FeaturePlot(seur_hu_thym$mait, features="CCR9")
 ```
 
 
