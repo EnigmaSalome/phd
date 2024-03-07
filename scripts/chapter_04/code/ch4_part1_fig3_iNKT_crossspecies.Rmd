@@ -1,5 +1,5 @@
 ---
-title: "Chapter X - R Notebook"
+title: "Chapter 4 - Cross-species iNKT"
 author: "Salomé Carcy"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
@@ -75,6 +75,7 @@ lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
   layers="Point",
   dpi=300
   )
+  print(p)
   if(file_name != "no"){
     ggsave(paste0("~/Projects/phd/data/figures/chapter_04/figs_unfinished/section1/", file_name),
            plot=p,
@@ -246,7 +247,7 @@ marker_genes_inkt_hu <- c(
 
 ```
 
-```{r mait-marker-genes2, fig.height=8, fig.width=4}
+```{r inkt-marker-genes2, fig.height=8, fig.width=4}
 do_DotPlot(
   seur_ms_thym$nkt,
   group.by="cell_type",
@@ -274,56 +275,93 @@ do_DotPlot(
 
 
 ## iNKT gene signature
-```{r mait-gene-signatures-mouse, fig.height=8, fig.width=8}
-legoux_gene_signature <- read.csv("./data/litterature_gene_signatures/mouse_tinn_signatures_combined.csv")[,1:2]
-legoux_gene_signature_list <- as.list(legoux_gene_signature)
-legoux_gene_signature_list <- lapply(legoux_gene_signature_list, function(x) x[x!=""]) # remove empty genes
-legoux_gene_signature_list <- lapply(legoux_gene_signature_list, function(x) x[x %in% rownames(seur_ms_thym$mait)]) # remove genes not found in our data
-lapply(legoux_gene_signature_list, function(x) length(x)) # sanity check (between 0-5 genes per signature lost)
+```{r inkt-gene-signatures-mouse, fig.height=8, fig.width=8}
+harshakrovi_supptable <- read.csv("./data/litterature_gene_signatures/harshakrovi_tableS1.csv", skip=1)[,2:8]
+harshakrovi_supptable <- harshakrovi_supptable %>%
+  # keep only iNKT1, 2, 17 clusters (c4-10)
+  filter(cluster %in% 4:10) %>%
+  filter(p_val_adj < 0.05) %>%
+  # cluster to iNKT subset
+  mutate(inkt=case_when(
+    cluster==4 ~ "iNKT2",
+    cluster==5 ~ "iNKT17",
+    cluster %in% 6:10 ~ "iNKT1"
+    )) %>%
+  # get DE genes per iNKT subset
+  select(gene, inkt) %>%
+  distinct()
+# write_csv(harshakrovi_supptable, "~/Downloads/inkt_signatures.csv")
 
-seur_ms_thym$mait <- AddModuleScore(
-  object = seur_ms_thym$mait,
+# make it into a list
+harshakrovi_gene_signature_list <- lapply(split(harshakrovi_supptable, harshakrovi_supptable$inkt), function(x) x$gene)
+names(harshakrovi_gene_signature_list) <- paste0("harshakrovi_", names(harshakrovi_gene_signature_list))
+harshakrovi_gene_signature_list <- lapply(harshakrovi_gene_signature_list, function(x) x[x!=""]) # remove empty genes
+harshakrovi_gene_signature_list <- lapply(harshakrovi_gene_signature_list, function(x) x[x %in% rownames(seur_ms_thym$nkt)]) # remove genes not found in our data
+lapply(harshakrovi_gene_signature_list, function(x) length(x)) # sanity check (0 genes per signature lost)
+
+# Score
+seur_ms_thym$nkt <- AddModuleScore(
+  object = seur_ms_thym$nkt,
   assay = "RNA",
-  features = legoux_gene_signature_list,
-  name=names(legoux_gene_signature_list),
+  features = harshakrovi_gene_signature_list,
+  name=names(harshakrovi_gene_signature_list),
   seed=1
   )
-colnames(seur_ms_thym$mait@meta.data)[10:11] <- names(legoux_gene_signature_list)
+colnames(seur_ms_thym$nkt@meta.data)[8:10] <- names(harshakrovi_gene_signature_list)
 
 # Plot and save
 lineage_genesignature(
-  seuratobj = seur_ms_thym$mait,
-  # file_name = "ch4_fig3_mait_signatureMAIT1_mouse.pdf",
-  genesignature = "legoux_mait1_thymus"
+  seuratobj = seur_ms_thym$nkt,
+  # file_name = "ch4_fig3_inkt_signatureNKT1_mouse.pdf",
+  genesignature = "harshakrovi_iNKT1"
   )
 lineage_genesignature(
-  seuratobj = seur_ms_thym$mait,
-  # file_name = "ch4_fig3_mait_signatureMAIT17_mouse.pdf",
-  genesignature = "legoux_mait17_thymus"
+  seuratobj = seur_ms_thym$nkt,
+  # file_name = "ch4_fig3_inkt_signatureNKT2_mouse.pdf",
+  genesignature = "harshakrovi_iNKT2"
+  )
+lineage_genesignature(
+  seuratobj = seur_ms_thym$nkt,
+  # file_name = "ch4_fig3_inkt_signatureNKT17_mouse.pdf",
+  genesignature = "harshakrovi_iNKT17"
 )
 ```
 
-```{r mait-gene-signatures-human, fig.height=8, fig.width=8}
+
+```{r inkt-gene-signatures-human, fig.height=8, fig.width=8}
 # check how many genes in gene signature we can find in ortholog table
-lapply(legoux_gene_signature_list, function(x) table(x %in% ortholog.df$ms_symbol, useNA="ifany"))
+lapply(harshakrovi_gene_signature_list, function(x) table(x %in% ortholog.df$ms_symbol, useNA="ifany")) # careful, 78 genes from iNKT1 not found in ortholog table (make sure that goes down when updating ortholog table!!!!!)
 
 # More than 80% of genes in gene signatures can be found in ortholog table, so let's translate them
-legoux_gene_signature_list_humangenes <- lapply(legoux_gene_signature_list, function(x) ortholog.df %>% filter(ms_symbol %in% x) %>% pull(hu_symbol))
-legoux_gene_signature_list_humangenes <- lapply(legoux_gene_signature_list_humangenes, function(x) x[x %in% rownames(seur_hu_thym$mait)]) # remove genes not found in our data
-lapply(legoux_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 8-16 genes per signature lost, but still >90 genes per signature left)
+harshakrovi_gene_signature_list_humangenes <- lapply(harshakrovi_gene_signature_list, function(x) ortholog.df %>% filter(ms_symbol %in% x) %>% pull(hu_symbol))
+harshakrovi_gene_signature_list_humangenes <- lapply(harshakrovi_gene_signature_list_humangenes, function(x) x[x %in% rownames(seur_hu_thym$nkt)]) # remove genes not found in our data
+lapply(harshakrovi_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 4-8 genes per signature lost, but still >10 genes per signature left)
 
-seur_hu_thym$mait <- AddModuleScore(
-  object = seur_hu_thym$mait,
+seur_hu_thym$nkt <- AddModuleScore(
+  object = seur_hu_thym$nkt,
   assay = "RNA",
-  features = legoux_gene_signature_list_humangenes,
-  name=names(legoux_gene_signature_list_humangenes),
+  features = harshakrovi_gene_signature_list_humangenes,
+  name=names(harshakrovi_gene_signature_list_humangenes),
   seed=1
   )
-colnames(seur_hu_thym$mait@meta.data)[49:50] <- names(legoux_gene_signature_list_humangenes)
+colnames(seur_hu_thym$nkt@meta.data)[49:51] <- names(harshakrovi_gene_signature_list_humangenes)
 
 # Plot and save
-lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait1_thymus", file_name = "ch4_fig3_mait_signatureMAIT1_human.pdf")
-lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait17_thymus", file_name = "ch4_fig3_mait_signatureMAIT17_human.pdf")
+lineage_genesignature(
+  seuratobj = seur_hu_thym$nkt,
+  genesignature = "harshakrovi_iNKT1",
+  file_name = "ch4_fig3_inkt_signatureNKT1_human.pdf"
+)
+lineage_genesignature(
+  seuratobj = seur_hu_thym$nkt,
+  genesignature = "harshakrovi_iNKT2",
+  file_name = "ch4_fig3_inkt_signatureNKT2_human.pdf"
+)
+lineage_genesignature(
+  seuratobj = seur_hu_thym$nkt,
+  genesignature = "harshakrovi_iNKT17",
+  file_name = "ch4_fig3_inkt_signatureNKT17_human.pdf"
+)
 ```
 
 
