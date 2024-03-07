@@ -1,0 +1,243 @@
+---
+title: "Chapter 4 - Cross-species gdT"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+# Seurat objects
+seur_hu_thym <- list(
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_nkt_with_gene_signatures.rds"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_mait_with_gene_signatures.rds"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_gdt_with_gene_signatures.rds")
+)
+
+seur_ms_thym <- list(
+  "nkt"=readRDS("./data/seurat_objects/harshakrovi2020/ms_nkt_seurobj.rds"),
+  "mait"=readRDS("./data/seurat_objects/legoux2019/ms_mait_seurobj.rds"),
+  "gdt"=readRDS("./data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+)
+
+# Orthologs table
+ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_one2one.csv")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
+  p <- ggrastr::rasterise(
+    do_FeaturePlot(
+    seuratobj,
+    features = genesignature,
+    min.cutoff=0,
+    use_viridis = T,
+    viridis.palette = "E",
+    legend.position="right",
+    order=T,
+    pt.size = 1.5,
+    raster=F
+    # raster.dpi=2048,
+    # pt.size=10
+  ),
+  layers="Point",
+  dpi=300
+  )
+  print(p)
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_04/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=9, height=6)
+  }
+}
+```
+
+Let's do a quick cleanup of the γδT object & save.
+```{r gdt-cleanup, echo=T, eval=F}
+seur_ms_thym$gdt@meta.data$gd_clusters_final <- case_when(
+  seur_ms_thym$gdt@meta.data$gd_subclusters== "G7-1 (Tγδ1)" ~ "immature Tγδ1",
+  seur_ms_thym$gdt@meta.data$gd_subclusters== "G7-2 (Tγδ1)" ~ "Tγδ1",
+  .default=seur_ms_thym$gdt@meta.data$gd_clusters
+)
+
+# sanity check
+table(seur_ms_thym$gdt@meta.data[,c("gd_subclusters", "gd_clusters_final")], useNA="ifany")
+# saveRDS(seur_ms_thym$gdt, "./data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+```
+
+
+
+
+# γδT FIGURE
+
+## γδT UMAPs
+```{r gdt-umap-mouse}
+seur_ms_thym$gdt$gd_clusters_final <- factor(seur_ms_thym$gdt$gd_clusters_final, levels=c(
+  "Tγδp",
+  "immature Tγδ1/17",
+  "immature Tγδ17",
+  "Tγδ17",
+  "immature Tγδ1",
+  "Tγδ1"
+))
+
+ggrastr::rasterise(
+  do_DimPlot(
+    seur_ms_thym$gdt,
+    group.by = "gd_clusters_final",
+    colors.use = cols_lee_ms,
+    legend.position = "right"
+  ),
+  layers = "Point",
+  dpi = 300
+) +
+  labs(title = "Mouse") +
+  theme(
+    axis.ticks = element_blank(),
+    axis.text = element_blank(),
+    axis.line = element_blank(),
+    panel.border = element_rect(
+      colour = "black",
+      fill = NA,
+      size = 1
+    ),
+    axis.title = element_text(hjust = 0)
+  )
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig5_gdt_umap_mouse.pdf", width=7, height=5, device=cairo_pdf)
+```
+
+```{r gdt-umap-human}
+ggrastr::rasterise(
+  do_DimPlot(seur_hu_thym$gdt, group.by="clusters_per_lineage", colors.use=cols_thym_gdt, legend.position="right"),
+  layers="Point",
+  dpi=300
+  ) +
+  labs(title="Human")+
+  theme(
+    axis.ticks=element_blank(),
+    axis.text=element_blank(),
+    axis.line = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    axis.title=element_text(hjust=0)
+    )
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig5_gdt_umap_human.pdf", width=7, height=5)
+```
+
+
+## γδT DotPlots
+TO DO
+
+
+## γδT gene signature
+```{r gdt-gene-signatures-mouse, fig.height=8, fig.width=8}
+lee_gene_signature <- read.csv("./data/litterature_gene_signatures/mouse_tinn_signatures_combined.csv")[,6:7]
+lee_gene_signature_list <- as.list(lee_gene_signature)
+lee_gene_signature_list <- lapply(lee_gene_signature_list, function(x) x[x!=""]) # remove empty genes
+lee_gene_signature_list <- lapply(lee_gene_signature_list, function(x) unique(x)) # keep unique genes
+
+# translate into ENSEMBL IDs
+library(biomaRt)
+mart.ms <- useMart(biomart="ENSEMBL_MART_ENSEMBL", dataset="mmusculus_gene_ensembl")
+mart.ms.df <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name'),
+                    filters = 'external_gene_name',
+                    values = c(lee_gene_signature_list$lee_gdt17_thymus, lee_gene_signature_list$lee_gdt1_thymus),
+                    mart = mart.ms)
+# table(lee_gene_signature_list$lee_gdt17_thymus %in% mart.ms.df$external_gene_name, useNA="ifany") # only 10 out of 150 not found
+# table(lee_gene_signature_list$lee_gdt1_thymus %in% mart.ms.df$external_gene_name, useNA="ifany") # only 6 out of 180 not found
+lee_gene_signature_list$lee_gdt17_thymus <- mart.ms.df %>% filter(external_gene_name %in% lee_gene_signature_list$lee_gdt17_thymus) %>% pull(ensembl_gene_id)
+lee_gene_signature_list$lee_gdt1_thymus <- mart.ms.df %>% filter(external_gene_name %in% lee_gene_signature_list$lee_gdt1_thymus) %>% pull(ensembl_gene_id)
+lee_gene_signature_list <- lapply(lee_gene_signature_list, function(x) x[x %in% rownames(seur_ms_thym$gdt)]) # remove genes not found in our data
+lapply(lee_gene_signature_list, function(x) length(x)) # sanity check (between 0-5 genes per signature lost)
+
+# the Tγδ1 signature didn't seem very specific to Tγδ1 but was also high in Tγδ17 (not shown)
+# so let's remove Tγδ17 signature genes we find in the Tγδ1 signature
+table(lee_gene_signature_list$lee_gdt1_thymus %in% lee_gene_signature_list$lee_gdt17_thymus)
+lee_gene_signature_list$lee_gdt1_thymus <- lee_gene_signature_list$lee_gdt1_thymus[!lee_gene_signature_list$lee_gdt1_thymus %in% lee_gene_signature_list$lee_gdt17_thymus]
+
+# Score
+seur_ms_thym$gdt <- AddModuleScore(
+  object = seur_ms_thym$gdt,
+  assay = "RNA",
+  features = lee_gene_signature_list,
+  name=names(lee_gene_signature_list),
+  seed=1
+  )
+colnames(seur_ms_thym$gdt@meta.data)[6:7] <- names(lee_gene_signature_list)
+
+# Plot and save
+lineage_genesignature(
+  seuratobj = seur_ms_thym$gdt,
+  # file_name = "ch4_fig5_gdt_signatureGDT1_mouse.pdf",
+  genesignature = "lee_gdt1_thymus"
+  )
+lineage_genesignature(
+  seuratobj = seur_ms_thym$gdt,
+  # file_name = "ch4_fig5_gdt_signatureGDT17_mouse.pdf",
+  genesignature = "lee_gdt17_thymus"
+)
+```
+
+```{r mait-gene-signatures-human, fig.height=8, fig.width=8}
+# check how many genes in gene signature we can find in ortholog table
+lapply(lee_gene_signature_list, function(x) table(x %in% ortholog.df$ms_symbol, useNA="ifany"))
+
+# More than 80% of genes in gene signatures can be found in ortholog table, so let's translate them
+lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list, function(x) ortholog.df %>% filter(ms_symbol %in% x) %>% pull(hu_symbol))
+lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list_humangenes, function(x) x[x %in% rownames(seur_hu_thym$mait)]) # remove genes not found in our data
+lapply(lee_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 8-16 genes per signature lost, but still >90 genes per signature left)
+
+seur_hu_thym$mait <- AddModuleScore(
+  object = seur_hu_thym$mait,
+  assay = "RNA",
+  features = lee_gene_signature_list_humangenes,
+  name=names(lee_gene_signature_list_humangenes),
+  seed=1
+  )
+colnames(seur_hu_thym$mait@meta.data)[49:50] <- names(lee_gene_signature_list_humangenes)
+
+# Plot and save
+lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait1_thymus", file_name = "ch4_fig3_mait_signatureMAIT1_human.pdf")
+lineage_genesignature(seuratobj=seur_hu_thym$mait, genesignature = "legoux_mait17_thymus", file_name = "ch4_fig3_mait_signatureMAIT17_human.pdf")
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
