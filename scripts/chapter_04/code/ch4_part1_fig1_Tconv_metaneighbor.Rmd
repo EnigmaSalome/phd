@@ -405,7 +405,7 @@ plot_mtn <-
       ) +
       geom_bar(stat = "identity", fill = "#bdbdbd") + theme_cowplot() +
       scale_x_discrete(position = "top") +
-      scale_y_continuous(limits = c(0, bp_ymax), breaks = c(0, 10, 20)) +
+      scale_y_continuous(limits = c(0, bp_ymax), breaks = seq(0,bp_ymax, length.out=3)) +
       labs(y = "%cells") +
       theme(
         axis.text.x = element_text(angle = 45, hjust = 0),
@@ -423,7 +423,7 @@ plot_mtn <-
       ) +
       geom_bar(stat = "identity", fill = "#bdbdbd") +
       scale_x_discrete(position = "top") +
-      scale_y_continuous(limits = c(0, bp_ymax), breaks = c(0, 10, 20)) +
+      scale_y_continuous(limits = c(0, bp_ymax), breaks = seq(0,bp_ymax, length.out=3)) +
       labs(y = "%cells") + coord_flip() + theme_cowplot() +
       theme(
         axis.title.y = element_blank(),
@@ -578,7 +578,7 @@ p_hu_hu
 # PLOT MARKER GENES
 
 ## Marker genes
-```{r}
+```{r marker-genes}
 # Mouse
 marker_genes_ms <- c(
   # DP
@@ -597,13 +597,13 @@ marker_genes_ms <- c(
   "Ikzf2",
   "Id3",
   # CD8aa1 (IELpA)
+  "Egr2",
   "Gng4",
   "Nr4a3",
   "Tnfrsf9",
   "Pdcd1",
-  "Hivep3",
   # CD8aa2 (IELpB?)
-  # "Znf683",
+  "Zfp683",
   "Xcl1",
   "Il2rb",
   # Tagonist
@@ -663,7 +663,7 @@ marker_genes_hu <- c(
   "NR4A3",
   "TNFRSF9",
   "PDCD1",
-  "HIVEP3",
+  # "HIVEP3",
   # CD8aa2
   "ZNF683",
   "XCL1",
