@@ -640,7 +640,7 @@ plot_mtn(
   var1_order = hu_levels,
   var2_order = ms_levels,
   bp_ymax = 50,
-  # file_name = "ch4_fig4_mait_metaneighbor_2000hvg_oldorthologdf.pdf",
+  # file_name = "ch4_fig4_mait_metaneighbor.pdf",
   figsize = 8
 )
 ```
