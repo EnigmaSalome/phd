@@ -226,6 +226,7 @@ cols_legoux_ms <- c(
 cols_lee_ms <- c(
   "immature Tγδ1/17"="#fec850",
   "Tγδ1"="#04cb87",
+  "immature Tγδ1"="#947501",
   "Tγδ17"="#052984",
   "immature Tγδ17"="#478bfd",
   "Tγδp"="#d62452"
