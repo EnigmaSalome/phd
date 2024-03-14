@@ -7,7 +7,6 @@ output:
     toc: true
     toc_float: true
     number_sections: true
-
 ---
 
 ```{r, setup, include=FALSE}
@@ -16,10 +15,10 @@ knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
                       root.dir = "~/Projects/phd/")
 ```
 
-
 # IMPORT
 
 ## Import librairies
+
 ```{r import-librairies}
 library(ggplot2)
 library(RColorBrewer)
@@ -29,11 +28,17 @@ library(dplyr)
 library(Seurat)
 library(SCpubr)
 library(patchwork)
+library(SummarizedExperiment)
+library(MetaNeighbor)
+library(gplots)
+library(reshape2)
+# library(ggrepel)
 
 source("~/Projects/phd/scripts/colors_universal.R")
 ```
 
 ## Import data
+
 ```{r import-data}
 # Seurat objects
 seur_hu_thym <- list(
@@ -56,6 +61,7 @@ ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_
 
 
 # FUNCTIONS
+
 ```{r define-functions}
 lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
   p <- ggrastr::rasterise(
@@ -82,9 +88,149 @@ lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
            width=9, height=6)
   }
 }
+
+plot_DotPlot <- function(seurobj, group, features, scaling=T){
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=features,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=id, y=features.plot, fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,6), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(axis.text.y=element_text(face="italic"),
+          axis.text.x=element_text(angle=45, hjust=1))+
+    labs(y="", x="Clusters")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")
+  } else{
+    p <- p + viridis::scale_fill_viridis(option="B", direction=-1, name="normalized\navg expression")
+  }
+  return(p)
+}
+
+plot_mtn <-
+  function(mtn_output,
+           var1 = "human",
+           var2 = "mouse",
+           var1_nbcells,
+           var2_nbcells,
+           var1_order,
+           var2_order,
+           bp_ymax = 20,
+           file_name="no",
+           figsize=12
+           ) {
+    
+  # REMODEL DATAFRAME
+  mtn.df <- melt(mtn_output) %>%
+    filter(str_detect(Var1,var1)) %>%
+    mutate(Var1 = gsub(paste0(var1, "\\|"), "", Var1)) %>%
+    filter(str_detect(Var2, var2)) %>%
+    mutate(Var2 = gsub(paste0(var2, "\\|"), "", Var2)) %>%
+    as_tibble() %>%
+    dplyr::rename(auroc=value) %>%
+    # add nb of cells for var1 and var2
+    left_join(var1_nbcells, by="Var1") %>%
+    left_join(var2_nbcells, by="Var2") %>%
+    # transform var1 and var2 into factors for ordering
+    mutate(Var1=factor(Var1, levels=var1_order),
+           Var2=factor(Var2, levels=var2_order))
+  
+    
+    # PROPORTION OF VAR1 THYMOCYTES IN EACH CLUSTER
+    bp.x <-
+      ggplot(
+        data = mtn.df %>% select(Var1, propcells_var1) %>% distinct(),
+        aes(x = Var1, y = propcells_var1)
+      ) +
+      geom_bar(stat = "identity", fill = "#bdbdbd") + theme_cowplot() +
+      scale_x_discrete(position = "top") +
+      scale_y_continuous(limits = c(0, bp_ymax), breaks = seq(0,bp_ymax, length.out=3)) +
+      labs(y = "%cells") +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 0),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "none"
+      )
+    
+    # PROPORTION OF VAR2 THYMOCYTES IN EACH CLUSTER
+    bp.y <-
+      ggplot(
+        data = mtn.df %>% select(Var2, propcells_var2) %>% distinct(),
+        aes(x = Var2, y = propcells_var2)
+      ) +
+      geom_bar(stat = "identity", fill = "#bdbdbd") +
+      scale_x_discrete(position = "top") +
+      scale_y_continuous(limits = c(0, bp_ymax), breaks = seq(0,bp_ymax, length.out=3)) +
+      labs(y = "%cells") + coord_flip() + theme_cowplot() +
+      theme(
+        axis.title.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.y = element_blank(),
+        legend.position = "none"
+      )
+    
+    # BUBBLEPLOT
+    hm.clean <-
+      ggplot(mtn.df, aes(x = Var1, y = Var2)) +
+      geom_point(aes(size = abs(auroc-0.5), fill = auroc), color="black", shape=21) +
+      geom_text(
+        data = mtn.df %>% filter(auroc > 0.8) %>% mutate(across("auroc", \(x) round(x, 2))),
+        aes(label = auroc),
+        color = "white"
+      ) +
+      scale_size_continuous(
+        limits = c(0, 0.5),
+        breaks = seq(0, 0.5, by = 0.1),
+        range = c(1, 15)
+      ) +
+      scale_fill_gradient2(
+        low = "#2166ac",
+        mid = "white",
+        high = "#a50f15",
+        midpoint = 0.5,
+        limits = c(0, 1),
+        name = "AUROC",
+        breaks = seq(0, 1, by = 0.2)
+      ) +
+      labs(x = paste(var1, "clusters"), y = paste(var2, "clusters"), size = "AUROC") +
+      theme_cowplot() +
+      theme(
+        legend.position = "bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+    
+    # COMBINE
+    p <- (bp.x+plot_spacer() + plot_layout(widths = c(5, 1))) / (hm.clean + bp.y + plot_layout(widths = c(5, 1))) + plot_layout(heights = c(1, 5))
+    if(file_name!="no"){ggsave(paste0("./data/figures/chapter_04/figs_unfinished/section1/", file_name), plot=p, width=figsize, height=figsize, device=cairo_pdf)}
+    return(p)
+  }
+
+# Get nb of cells in human and mouse clusters
+nbcells_hu <- as.data.frame(table(seur_hu_thym$gdt$clusters_per_lineage)) %>%
+    dplyr::rename(ncells_var1=Freq) %>%
+    mutate(propcells_var1 = ncells_var1*100/dim(seur_hu_thym$gdt)[2]) 
+nbcells_ms <- as.data.frame(table(seur_ms_thym$gdt$gd_clusters_final)) %>%
+    dplyr::rename(Var2=Var1, ncells_var2=Freq) %>%
+    mutate(propcells_var2 = ncells_var2*100/dim(seur_ms_thym$gdt)[2])
+
+# Define order of mouse and human clusters
+hu_levels <- paste0("GDT_thymus_c", 0:7)
+ms_levels <- rev(levels(seur_ms_thym$gdt$gd_clusters_final))
 ```
 
 Let's do a quick cleanup of the γδT object & save.
+
 ```{r gdt-cleanup, echo=T, eval=F}
 seur_ms_thym$gdt@meta.data$gd_clusters_final <- case_when(
   seur_ms_thym$gdt@meta.data$gd_subclusters== "G7-1 (Tγδ1)" ~ "immature Tγδ1",
@@ -95,6 +241,55 @@ seur_ms_thym$gdt@meta.data$gd_clusters_final <- case_when(
 # sanity check
 table(seur_ms_thym$gdt@meta.data[,c("gd_subclusters", "gd_clusters_final")], useNA="ifany")
 # saveRDS(seur_ms_thym$gdt, "./data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+
+
+# ---
+# TRANSLATE GENE ENSEMBL TO MOUSE SYMBOLS
+ms_ensembl <- read.csv("./data/cross_species/biomart_export_ms.txt")[,1:3]
+colnames(ms_ensembl) <- c("gene_ensembl", "gene_version", "gene_symbol")
+ms_ensembl <- ms_ensembl %>% distinct() %>% filter(gene_symbol != "")
+table(rownames(seur_ms_thym$gdt) %in% ms_ensembl$gene_ensembl, useNA="ifany") # 515 genes out of 25614 don't have gene symbol
+table(VariableFeatures(seur_ms_thym$gdt) %in% ms_ensembl$gene_ensembl, useNA="ifany") # only 5 HVGs don't have gene symbol
+# check if some gene symbols are assigned to multiple ENSEMBL
+ms_ensembl %>%
+  group_by(gene_symbol) %>%
+  filter(n_distinct(gene_ensembl)>1) %>%
+  dplyr::arrange(gene_symbol) %>%
+  filter(gene_ensembl %in% rownames(seur_ms_thym$gdt)) # mostly some Rik and Gm genes
+# let's keep only genes that have 1:1 ENSEMBL to gene symbol matching (for now for simplicity)
+genes_to_keep <- ms_ensembl %>%
+  group_by(gene_symbol) %>%
+  filter(n_distinct(gene_ensembl)==1) %>%
+  ungroup() %>%
+  group_by(gene_ensembl) %>%
+  filter(n_distinct(gene_symbol)==1) %>%
+  ungroup() %>%
+  pull(gene_ensembl)
+# subset seurat object to genes with known symbols
+seur_ms_thym$gdt <- seur_ms_thym$gdt[rownames(seur_ms_thym$gdt) %in% genes_to_keep]
+# subset gene dataframe to seurat genes
+ms_ensembl <- ms_ensembl %>% filter(gene_ensembl %in% rownames(seur_ms_thym$gdt))
+ms_ensembl <- ms_ensembl[match(rownames(seur_ms_thym$gdt), ms_ensembl$gene_ensembl),] # reorder in same order as genes in seurat object
+table(ms_ensembl$gene_ensembl==rownames(seur_ms_thym$gdt), useNA="ifany") # sanity check
+
+# DISASSEMBLE SEURAT AND TRANSLATE TO GENE SYMBOLS
+count_matrix <- seur_ms_thym$gdt@assays$RNA@counts
+# count_matrix <- seur_ms_thym$gdt@assays[["RNA"]]
+data_matrix <- seur_ms_thym$gdt@assays$RNA@data
+hvg <- VariableFeatures(seur_ms_thym$gdt)
+# table(rownames(count_matrix)==ms_ensembl$gene_ensembl, useNA="ifany")
+# table(rownames(data_matrix)==ms_ensembl$gene_ensembl, useNA="ifany")
+# table(rownames(seur_ms_thym$gdt@assays$RNA@meta.features)==ms_ensembl$gene_ensembl, useNA="ifany")
+rownames(count_matrix) <- ms_ensembl$gene_symbol
+rownames(data_matrix) <- ms_ensembl$gene_symbol
+hvg <- ms_ensembl %>% filter(gene_ensembl %in% hvg) %>% pull(gene_symbol)
+
+# REASSEMBLE SEURAT
+rownames(seur_ms_thym$gdt@assays$RNA@meta.features) <- ms_ensembl$gene_symbol
+seur_ms_thym$gdt@assays$RNA@counts <- count_matrix
+seur_ms_thym$gdt@assays$RNA@data <- data_matrix
+VariableFeatures(seur_ms_thym$gdt) <- hvg
+# saveRDS(seur_ms_thym$gdt, "./data/seurat_objects/lee2020/ms_gdt_seurobj_lee_genesymbols.rds")
 ```
 
 
@@ -157,7 +352,138 @@ ggrastr::rasterise(
 
 
 ## γδT DotPlots
-TO DO
+Here we select genes that define each mouse cluster based on [Lee et al. 2020](https://www.nature.com/articles/s41467-020-18155-8), [Sumaria et al. 2017](https://www.sciencedirect.com/science/article/pii/S2211124717307283?via%3Dihub), [Sumaria et al. 2018](https://onlinelibrary.wiley.com/doi/10.1111/imm.13032) and . These are not "marker genes" *per se*, as we didn't obtain them by computing the most DE genes in each cluster. Instead we selected the genes highlighted in the literature as defining each $\gamma\delta$ developmental stage.
+```{r gdt-marker-genes1, fig.height=8, fig.width=4}
+marker_genes_gdt_ms <- c(
+  # GDp (whatever this is)
+  "Cdk1",
+  "Mki67",
+  # "Cd27",
+  # "Egr1",
+  # "Egr3",
+  # "Id3",
+  # "Tcf3",
+  # Maturation markers (loss CD24, gain CD44)
+  "Il2ra", # CD25 not well detected
+  "Cd24a",
+  "Cd44",
+  # ----
+  # GD 2
+  # "Il4",
+  # "Cd27", # also GD1
+  # "Zbtb16", # also GD NKT
+  # "Cd4",
+  # "Il17rb",
+  # "Slamf6",
+  # "Il21r",
+  # "Satb1",
+  # "Egr2",
+  # ----
+  # GD 17
+  # "Sox4",
+  "Sox13",
+  "Notch1",
+  # "Smad3",
+  "Rorc",
+  "Rora",
+  # "Cd44",
+  "Il7r",
+  "Ccr6",
+  "Il23r",
+  "Tmem176a",
+  # ----
+  # GD 1
+  "Cd200",
+  "Nr4a1",
+  "Tbx21",
+  "Eomes",
+  "Ifng",
+  "Cxcr3",
+  "Nt5e",
+  "Xcl1",
+  "Il2rb", # GD NKT
+  # "Klrb1c", # GD NKT (barely expressed there)
+  "Slamf7",
+  # Exit
+  "Klf2",
+  "S1pr1"
+)
+
+
+marker_genes_gdt_hu <- c(
+  # GDp (whatever this is)
+  "CDK1",
+  "MKI67",
+  # "Cd27",
+  # "Egr1",
+  # "Egr3",
+  # "Id3",
+  # "Tcf3",
+  # Maturation markers (loss CD24, gain CD44)
+  "IL2RA", # CD25 not well detected
+  "CD24",
+  "CD44",
+  # ----
+  # GD 2
+  # "Il4",
+  # "Cd27", # also GD1
+  # "Zbtb16", # also GD NKT
+  # "Cd4",
+  # "Il17rb",
+  # "Slamf6",
+  # "Il21r",
+  # "Satb1",
+  # "Egr2",
+  # ----
+  # GD 17
+  # "Sox4",
+  "SOX13",
+  "NOTCH1",
+  # "Smad3",
+  "RORC",
+  "RORA",
+  # "Cd44",
+  "IL7R",
+  "CCR6",
+  "IL23R",
+  "IL12RB1", # TMEM176A was not found, so putting a placeholder gene instead
+  # ----
+  # GD 1
+  "CD200",
+  "NR4A1",
+  "TBX21",
+  "EOMES",
+  "IFNG",
+  "CXCR3",
+  "NT5E",
+  "XCL1",
+  "IL2RB", # GD NKT
+  # "Klrb1c", # GD NKT (barely expressed there)
+  "SLAMF7",
+  # Exit
+  "KLF2",
+  "S1PR1"
+)
+
+```
+
+```{r gdt-marker-genes2, fig.height=8, fig.width=4}
+plot_DotPlot(
+  seurobj = seur_ms_thym$gdt,
+  group = "gd_clusters_final",
+  features = marker_genes_gdt_ms,
+  scaling = T
+)
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig5_gdt_stages_dotplot_mouse.pdf", width=4, height=7, device=cairo_pdf)
+
+plot_DotPlot(
+  seurobj = seur_hu_thym$gdt,
+  group = "clusters_per_lineage",
+  features = marker_genes_gdt_hu,
+  scaling = T
+)
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig5_gdt_stages_dotplot_human.pdf", width=4, height=7, device=cairo_pdf)
+```
 
 
 ## γδT gene signature
@@ -209,7 +535,7 @@ lineage_genesignature(
 )
 ```
 
-```{r mait-gene-signatures-human, fig.height=8, fig.width=8}
+```{r gdt-gene-signatures-human, fig.height=8, fig.width=8}
 # check how many genes in gene signature we can find in ortholog table
 lapply(lee_gene_signature_list, function(x) table(x %in% ortholog.df$ms_ensemblID, useNA="ifany"))
 
@@ -243,9 +569,163 @@ lineage_genesignature(
 
 
 
-# SESSION INFO
-```{r}
-sessionInfo()
+# γδT METANEIGHBOR
+
+## Prepare data for metaneighbor
+```{r gdt-prep-metaneighbor}
+# Get the ms seurat object with ENSEMBL IDs again (it's better for identifying orthologs)
+seur_ms_thym$gdt <- readRDS("./data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+# rownames(seur_ms_thym$gdt)[1:5]
+
+# Get the ortholog table with 1:1 orthologs only and orthology confidence of 1
+ortholog_df_1to1 <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_one2one.csv")
+
+# Get counts, HVGs and metadata
+ms.hvg <- VariableFeatures(FindVariableFeatures(seur_ms_thym$gdt, nfeatures=5000))
+length(ms.hvg)
+ms.counts <- seur_ms_thym$gdt[["RNA"]]@counts
+ms.metadata <- seur_ms_thym$gdt@meta.data
+
+hu.hvg <- VariableFeatures(FindVariableFeatures(seur_hu_thym$gdt, nfeatures=5000))
+length(hu.hvg)
+hu.counts <- seur_hu_thym$gdt[["RNA"]]@counts
+hu.metadata <- seur_hu_thym$gdt@meta.data
+
+
+# First, check whether genes can all be found in the ortholog table (many can't be found because I removed genes with orthology confidence=0)
+table(unique(rownames(ms.counts)) %in% unique(ortholog_df_1to1$ms_ensemblID)) # 13,117 not
+table(unique(rownames(hu.counts)) %in% ortholog_df_1to1$hu_symbol) # 5,238 not
+
+
+# Subset the ortholog table to only genes that we can "translate"
+dictionary <- ortholog_df_1to1 %>%
+  as_tibble() %>%
+  ## Intersection
+  filter(ms_ensemblID %in% unique(rownames(ms.counts)) & hu_symbol %in% unique(rownames(hu.counts))) %>%
+  ## Remove any symbols that are NAs
+  filter(!is.na(ms_ensemblID)) %>%
+  filter(!is.na(hu_symbol)) #%>%
+  ## Keep only 1:1 orthologs
+  # group_by(ms_ensemblID) %>% filter(n_distinct(hu_symbol) == 1) %>% ungroup() %>%
+  # group_by(hu_symbol) %>% filter(n_distinct(ms_ensemblID) == 1) %>% ungroup()
+dim(dictionary) # 11,098 genes
+
+
+# Translate the mouse HVGs into "human gene" language
+ms.hvg.translated <- pull(dictionary %>% filter(ms_ensemblID %in% ms.hvg), # not all ms HVGs are found in ortholog.df
+                          hu_symbol)
+hu.hvg.translated <- pull(dictionary %>% filter(hu_symbol %in% hu.hvg), # not all hu HVGs are found in ortholog.df
+                          hu_symbol)
+total.hvg <- unique(union(ms.hvg.translated, hu.hvg.translated))
+length(total.hvg) # 4,771 (if 5000 HVGs each)
+table(total.hvg %in% unique(ms.hvg.translated), useNA="ifany") # 2,864 come from mouse
+table(total.hvg %in% unique(hu.hvg.translated), useNA="ifany") # 3,075 come from human => overlap of 1,168 common HVGs
+
+
+# Keep only ms and hu genes that have 1:1 orthologs
+table(unique(rownames(ms.counts)) %in% dictionary$ms_ensemblID) # 11,098 genes should have a translation
+table(unique(rownames(hu.counts)) %in% dictionary$hu_symbol) # 11,098 genes should have a translation
+ms.counts <- ms.counts[rownames(ms.counts) %in% dictionary$ms_ensemblID,]
+hu.counts <- hu.counts[rownames(hu.counts) %in% dictionary$hu_symbol,]
+nrow(ms.counts)==nrow(hu.counts) # should be TRUE
+
+
+# Translate the mouse genes in count table into "human gene"
+ms.dict <- dictionary %>%
+  filter(ms_ensemblID %in% rownames(ms.counts)) %>%
+  select(ms_ensemblID, hu_symbol) %>%
+  # distinct() %>%
+  # group_by(ms_ensemblID) %>% filter(n_distinct(hu_symbol)>1)
+  distinct(ms_ensemblID, .keep_all=T)
+ms.dict <- ms.dict[match(rownames(ms.counts), ms.dict$ms_ensemblID),]
+table(ms.dict$ms_ensemblID == rownames(ms.counts)) # should be all TRUE
+table(is.na(ms.dict$hu_symbol)) # should have no NAs
+# Translate
+rownames(ms.counts) <- ms.dict$hu_symbol
+
+
+# Merge everything into one
+ms.metadata$study <- "Mouse"
+ms.metadata <- ms.metadata[,c("gd_clusters_final", "study")]
+colnames(ms.metadata)[1] <- "clusters_GDT"
+head(ms.metadata)
+
+hu.metadata$study <- "Human"
+hu.metadata <- hu.metadata[,c("clusters_per_lineage", "study")]
+colnames(hu.metadata)[1] <- "clusters_GDT"
+head(hu.metadata)
+
+ms.counts <- ms.counts[rownames(hu.counts),]
+table(rownames(ms.counts)==rownames(hu.counts), useNA="ifany")
+table(colnames(ms.metadata)==colnames(hu.metadata), useNA="ifany")
+tot.counts   <- cbind(ms.counts, hu.counts)
+tot.metadata <- rbind(ms.metadata, hu.metadata)
+table(colnames(tot.counts)==rownames(tot.metadata), useNA="ifany")
+
+# Convert seurat count matrix to SummarizedExperiment object
+count <- SummarizedExperiment(assays = tot.counts,
+                              colData = tot.metadata)
 ```
 
 
+## Run metaneighbor
+```{r gdt-run-metaneighbor}
+# Run metaneighbor
+mtn <- MetaNeighborUS(var_genes=total.hvg,
+                      dat=count,
+                      study_id=count$study,
+                      cell_type=count$clusters_GDT,
+                      fast_version=T)
+
+# Plot heatmap
+# pdf(
+#   file = "./data/figures/chapter_04/figs_unfinished/suppfigures/gdt_crosspecies_metaneighbor_heatmap.pdf",
+#   width = 5.5,
+#   height = 5.5
+#   )
+heatmap.2(
+  mtn,
+  trace = "none",
+  # superimpose a density histogram on color key
+  density.info = "none",
+  # color scale
+  col = rev(colorRampPalette(brewer.pal(11, "RdYlBu"))(100)),
+  breaks = seq(0, 1, length = 101),
+  key.xlab = "AUROC",
+  key.title = "",
+  # text labels
+  main = "Mouse vs Human GDT",
+  cexRow = 0.6,
+  cexCol = 0.6,
+  # margins
+  margins = c(7, 7)
+)
+# dev.off()
+```
+
+
+## Make nice figure out of metaneighbor
+```{r gdt-plot-metaneighbor, fig.height=7, fig.width=7}
+plot_mtn(
+  mtn_output = mtn,
+  var1 = "Human",
+  var2 = "Mouse",
+  var1_nbcells = nbcells_hu,
+  var2_nbcells = nbcells_ms,
+  var1_order = hu_levels,
+  var2_order = ms_levels,
+  bp_ymax = 50,
+  # file_name = "chap4_fig5_gdt_metaneighbor.pdf",
+  figsize = 8
+)
+```
+
+
+
+
+
+# SESSION INFO
+
+```{r}
+sessionInfo()
+```
