@@ -53,6 +53,15 @@ seur_ms_thym <- list(
   "gdt"=readRDS("./data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
 )
 
+seur_ms_thym$gdt$gd_clusters_final <- factor(seur_ms_thym$gdt$gd_clusters_final, levels=c(
+  "Tγδp",
+  "immature Tγδ1/17",
+  "immature Tγδ17",
+  "Tγδ17",
+  "immature Tγδ1",
+  "Tγδ1"
+))
+
 # Orthologs table
 ortholog.df <- read.csv("~/Projects/phd/data/cross_species/ortholog_table_ms_hu_full.csv")
 ```
@@ -230,7 +239,6 @@ ms_levels <- rev(levels(seur_ms_thym$gdt$gd_clusters_final))
 ```
 
 Let's do a quick cleanup of the γδT object & save.
-
 ```{r gdt-cleanup, echo=T, eval=F}
 seur_ms_thym$gdt@meta.data$gd_clusters_final <- case_when(
   seur_ms_thym$gdt@meta.data$gd_subclusters== "G7-1 (Tγδ1)" ~ "immature Tγδ1",
@@ -241,8 +249,10 @@ seur_ms_thym$gdt@meta.data$gd_clusters_final <- case_when(
 # sanity check
 table(seur_ms_thym$gdt@meta.data[,c("gd_subclusters", "gd_clusters_final")], useNA="ifany")
 # saveRDS(seur_ms_thym$gdt, "./data/seurat_objects/lee2020/ms_gdt_seurobj_lee.rds")
+```
 
-
+We also need to translate ENSEMBL genes to gene symbols.
+```{r gdt-cleanup2}
 # ---
 # TRANSLATE GENE ENSEMBL TO MOUSE SYMBOLS
 ms_ensembl <- read.csv("./data/cross_species/biomart_export_ms.txt")[,1:3]
@@ -299,15 +309,6 @@ VariableFeatures(seur_ms_thym$gdt) <- hvg
 
 ## γδT UMAPs
 ```{r gdt-umap-mouse}
-seur_ms_thym$gdt$gd_clusters_final <- factor(seur_ms_thym$gdt$gd_clusters_final, levels=c(
-  "Tγδp",
-  "immature Tγδ1/17",
-  "immature Tγδ17",
-  "Tγδ17",
-  "immature Tγδ1",
-  "Tγδ1"
-))
-
 ggrastr::rasterise(
   do_DimPlot(
     seur_ms_thym$gdt,
@@ -366,6 +367,7 @@ marker_genes_gdt_ms <- c(
   # Maturation markers (loss CD24, gain CD44)
   "Il2ra", # CD25 not well detected
   "Cd24a",
+  "Clec12a",
   "Cd44",
   # ----
   # GD 2
@@ -393,6 +395,7 @@ marker_genes_gdt_ms <- c(
   "Tmem176a",
   # ----
   # GD 1
+  "Cd27",
   "Cd200",
   "Nr4a1",
   "Tbx21",
@@ -422,6 +425,7 @@ marker_genes_gdt_hu <- c(
   # Maturation markers (loss CD24, gain CD44)
   "IL2RA", # CD25 not well detected
   "CD24",
+  "CLEC12A",
   "CD44",
   # ----
   # GD 2
@@ -449,6 +453,7 @@ marker_genes_gdt_hu <- c(
   "IL12RB1", # TMEM176A was not found, so putting a placeholder gene instead
   # ----
   # GD 1
+  "CD27",
   "CD200",
   "NR4A1",
   "TBX21",
@@ -467,60 +472,78 @@ marker_genes_gdt_hu <- c(
 
 ```
 
-```{r gdt-marker-genes2, fig.height=8, fig.width=4}
+```{r gdt-marker-genes2, fig.height=8, fig.width=8}
 plot_DotPlot(
   seurobj = seur_ms_thym$gdt,
   group = "gd_clusters_final",
   features = marker_genes_gdt_ms,
   scaling = T
-)
-# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig5_gdt_stages_dotplot_mouse.pdf", width=4, height=7, device=cairo_pdf)
-
+) +
 plot_DotPlot(
   seurobj = seur_hu_thym$gdt,
   group = "clusters_per_lineage",
   features = marker_genes_gdt_hu,
   scaling = T
 )
-# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig5_gdt_stages_dotplot_human.pdf", width=4, height=7, device=cairo_pdf)
+# ggsave("./data/figures/chapter_04/figs_unfinished/section1/ch4_fig5_gdt_stages_dotplot.pdf", width=8, height=7, device=cairo_pdf)
 ```
 
 
 ## γδT gene signature
-```{r gdt-gene-signatures-mouse, fig.height=8, fig.width=8}
+Let's first prepare the mouse and human gene signatures.
+```{r gdt-gene-signatures-prep}
+# Import mouse gene signatures
 lee_gene_signature <- read.csv("./data/litterature_gene_signatures/mouse_tinn_signatures_combined.csv")[,6:7]
 lee_gene_signature_list <- as.list(lee_gene_signature)
 lee_gene_signature_list <- lapply(lee_gene_signature_list, function(x) x[x!=""]) # remove empty genes
 lee_gene_signature_list <- lapply(lee_gene_signature_list, function(x) unique(x)) # keep unique genes
 
-# translate into ENSEMBL IDs
-library(biomaRt)
-mart.ms <- useMart(biomart="ENSEMBL_MART_ENSEMBL", dataset="mmusculus_gene_ensembl")
-mart.ms.df <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name'),
-                    filters = 'external_gene_name',
-                    values = c(lee_gene_signature_list$lee_gdt17_thymus, lee_gene_signature_list$lee_gdt1_thymus),
-                    mart = mart.ms)
-# table(lee_gene_signature_list$lee_gdt17_thymus %in% mart.ms.df$external_gene_name, useNA="ifany") # only 10 out of 150 not found
-# table(lee_gene_signature_list$lee_gdt1_thymus %in% mart.ms.df$external_gene_name, useNA="ifany") # only 6 out of 180 not found
-lee_gene_signature_list$lee_gdt17_thymus <- mart.ms.df %>% filter(external_gene_name %in% lee_gene_signature_list$lee_gdt17_thymus) %>% pull(ensembl_gene_id)
-lee_gene_signature_list$lee_gdt1_thymus <- mart.ms.df %>% filter(external_gene_name %in% lee_gene_signature_list$lee_gdt1_thymus) %>% pull(ensembl_gene_id)
-lee_gene_signature_list <- lapply(lee_gene_signature_list, function(x) x[x %in% rownames(seur_ms_thym$gdt)]) # remove genes not found in our data
-lapply(lee_gene_signature_list, function(x) length(x)) # sanity check (between 0-5 genes per signature lost)
+# # translate into ENSEMBL IDs
+# library(biomaRt)
+# mart.ms <- useMart(biomart="ENSEMBL_MART_ENSEMBL", dataset="mmusculus_gene_ensembl")
+# mart.ms.df <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name'),
+#                     filters = 'external_gene_name',
+#                     values = c(lee_gene_signature_list$lee_gdt17_thymus, lee_gene_signature_list$lee_gdt1_thymus),
+#                     mart = mart.ms)
+# # table(lee_gene_signature_list$lee_gdt17_thymus %in% mart.ms.df$external_gene_name, useNA="ifany") # only 10 out of 150 not found
+# # table(lee_gene_signature_list$lee_gdt1_thymus %in% mart.ms.df$external_gene_name, useNA="ifany") # only 6 out of 180 not found
+# lee_gene_signature_list$lee_gdt17_thymus <- mart.ms.df %>% filter(external_gene_name %in% lee_gene_signature_list$lee_gdt17_thymus) %>% pull(ensembl_gene_id)
+# lee_gene_signature_list$lee_gdt1_thymus <- mart.ms.df %>% filter(external_gene_name %in% lee_gene_signature_list$lee_gdt1_thymus) %>% pull(ensembl_gene_id)
+
+ # remove ms genes not found in our ms data
+lee_gene_signature_list <- lapply(lee_gene_signature_list, function(x) x[x %in% rownames(seur_ms_thym$gdt)])
+lapply(lee_gene_signature_list, function(x) length(x)) # sanity check (between 7-10 genes per signature lost)
 
 # the Tγδ1 signature didn't seem very specific to Tγδ1 but was also high in Tγδ17 (not shown)
 # so let's remove Tγδ17 signature genes we find in the Tγδ1 signature
 table(lee_gene_signature_list$lee_gdt1_thymus %in% lee_gene_signature_list$lee_gdt17_thymus)
 lee_gene_signature_list$lee_gdt1_thymus <- lee_gene_signature_list$lee_gdt1_thymus[!lee_gene_signature_list$lee_gdt1_thymus %in% lee_gene_signature_list$lee_gdt17_thymus]
 
+# check how many genes in gene signature we can find in ortholog table
+lapply(lee_gene_signature_list, function(x) table(x %in% ortholog.df$ms_symbol, useNA="ifany"))
+
+# More than 80% of genes in gene signatures can be found in ortholog table, so let's translate them
+lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list, function(x) ortholog.df %>% filter(ms_symbol %in% x) %>% pull(hu_symbol))
+lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list_humangenes, function(x) unique(x[x %in% rownames(seur_hu_thym$gdt)])) # remove genes not found in hu data, and make sure to have unique genes
+lapply(lee_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 10-13 genes per signature lost, but still >100 genes per signature left)
+
+# Let's remove any mouse genes in the mouse signatures that didn't have human orthologs, or the human orthologs were not found in human data
+lee_gene_signature_list_mousegenes <- lapply(lee_gene_signature_list_humangenes, function(x) ortholog.df %>% filter(hu_symbol %in% x) %>% pull(ms_symbol))
+lee_gene_signature_list_mousegenes <- lapply(lee_gene_signature_list_mousegenes, function(x) unique(x[x %in% rownames(seur_ms_thym$gdt)])) # remove genes not found in ms data, and make sure to have unique genes
+lapply(lee_gene_signature_list_mousegenes, function(x) length(x)) # sanity check (there may be a slight different number of genes compared to human because of the 1:many and many:many orthologs)
+```
+
+Now let's score and plot!
+```{r gdt-gene-signatures-mouse, fig.height=8, fig.width=8}
 # Score
 seur_ms_thym$gdt <- AddModuleScore(
   object = seur_ms_thym$gdt,
   assay = "RNA",
-  features = lee_gene_signature_list,
-  name=names(lee_gene_signature_list),
+  features = lee_gene_signature_list_mousegenes,
+  name=names(lee_gene_signature_list_mousegenes),
   seed=1
   )
-colnames(seur_ms_thym$gdt@meta.data)[17:18] <- names(lee_gene_signature_list)
+colnames(seur_ms_thym$gdt@meta.data)[17:18] <- names(lee_gene_signature_list_mousegenes)
 
 # Plot and save
 lineage_genesignature(
@@ -536,14 +559,6 @@ lineage_genesignature(
 ```
 
 ```{r gdt-gene-signatures-human, fig.height=8, fig.width=8}
-# check how many genes in gene signature we can find in ortholog table
-lapply(lee_gene_signature_list, function(x) table(x %in% ortholog.df$ms_ensemblID, useNA="ifany"))
-
-# More than 80% of genes in gene signatures can be found in ortholog table, so let's translate them
-lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list, function(x) ortholog.df %>% filter(ms_ensemblID %in% x) %>% pull(hu_symbol))
-lee_gene_signature_list_humangenes <- lapply(lee_gene_signature_list_humangenes, function(x) unique(x[x %in% rownames(seur_hu_thym$gdt)])) # remove genes not found in our data, and make sure to have unique genes
-lapply(lee_gene_signature_list_humangenes, function(x) length(x)) # sanity check (between 10-13 genes per signature lost, but still >100 genes per signature left)
-
 seur_hu_thym$gdt <- AddModuleScore(
   object = seur_hu_thym$gdt,
   assay = "RNA",
@@ -718,6 +733,25 @@ plot_mtn(
   # file_name = "chap4_fig5_gdt_metaneighbor.pdf",
   figsize = 8
 )
+```
+
+
+
+
+# Sanchez-Sanchez human $\gamma\delta$ data
+
+```{r}
+seur_sanchez <- list(
+  "gdt_fetal"=readRDS("./data/seurat_objects/sanchez2023/GSE180059_FT_Seurat.rds"),
+  "gdt_pnt"=readRDS("./data/seurat_objects/sanchez2023/GSE180059_PNT_Seurat.rds")
+)
+
+# Plot
+DimPlot(seur_sanchez$gdt_fetal, group.by="seurat_clusters", label=T)
+DimPlot(seur_sanchez$gdt_pnt)
+
+# metadata
+seur_sanchez$gdt_fetal@meta.data
 ```
 
 

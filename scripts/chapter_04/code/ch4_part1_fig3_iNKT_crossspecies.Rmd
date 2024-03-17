@@ -684,7 +684,7 @@ Try to randomly sample cells from each cluster, to have equal number of cells pe
 ```{r nkt-metaneighbor-subset-100sampling, fig.height=7, fig.width=7}
 tot.metadata$clusters_NKT <- as.character(tot.metadata$clusters_NKT)
 
-# Randomly sample 330 cells per mouse cluster
+# Randomly sample X number of cells per cluster (choosing the minimum per species)
 randomcells_list <- list()
 mtn_list <- list()
 for(i in 1:100){
