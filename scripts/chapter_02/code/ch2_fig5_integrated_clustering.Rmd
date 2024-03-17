@@ -9,6 +9,7 @@ output:
     number_sections: true
 
 ---
+This notbeook is to generate figure 5 in chapter 2.
 
 ```{r, setup, include=FALSE}
 knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
@@ -46,7 +47,31 @@ DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
 
 # FUNCTIONS
 ```{r define-functions}
-
+plot_DotPlot <- function(seurobj, group, genes, scaling=T){
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=genes,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=id, y=features.plot, fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,6), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(axis.text.y=element_text(face="italic"),
+          legend.position="bottom")+
+    labs(y="", x="")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")
+  } else{
+    p <- p + viridis::scale_fill_viridis(option="B", direction=-1, name="normalized\navg expression")
+  }
+  return(p)
+}
 ```
 
 
@@ -101,49 +126,39 @@ genes_dotplot <- c(
   "CD4", "CD8A", "CD8B", "CD1C", "AQP3", # DP
   "CCR9", "SATB1", # ab T entry
   "EGR1", "EGR3", "NR4A1", # Agonist
-  "CD8A", "PDCD1", "GNG4", # CD8aa
+  "PDCD1", "GNG4", # CD8aa
   "TRDC", "TRGC2", # GD
   "IKZF4", "FOXP3", "CTLA4", "IL2RA", # Treg
   "STAT1", "IFI6", # IFN sig
-  "CD8B", "RUNX3", "LINC02446", # CD8
-  "CD4", "ZBTB7B", "CD40LG", # CD4
+  "RUNX3", "LINC02446", # CD8
+  "ZBTB7B", "CD40LG", # CD4
   "CCR7", "SELL", "S1PR1",  #"IL7R", # Naive / exit
   "FOS", "JUN", "JUNB", # AP1 signaling
   "EOMES", "TBX21", "RORA", "RORC", "GZMK", "GZMB", "GNLY", "PRF1", "NKG7", "KLRB1", "IFNG", "CCR6" # Effector
   )
 
 # DotPlot
-fig5_p1 <- do_DotPlot(
-  sample=seur_integrated[,thymocytes_cellid],
-  features=genes_dotplot,
-  group.by = "clusters_integrated_data",
-  legend.position = "right",
-  use_viridis = T,
-  viridis.palette = "B",
-  flip=T
-  )+
-  # coord_flip()+
-  theme(axis.text.x=element_text(angle=0, hjust=0.5),
-        axis.text.y=element_text(face="italic"))
-
-# Barplot of nb of cells
-fig5_p2 <- seur_integrated@meta.data %>%
-  as_data_frame() %>%
-  filter(tissue=="Thymus") %>%
-  group_by(clusters_integrated_data, tcell_lineage) %>%
-  count() %>%
-  ggplot(aes(x=clusters_integrated_data, y=n, fill=tcell_lineage))+
-  geom_bar(stat="identity")+
-  scale_fill_manual(values=cols_lineages, name="Cell hashing")+
-  scale_y_continuous(expand = c(0, 0))+
-  # scale_x_discrete(position="top")+
-  labs(x="", y="Number of thymocytes")+
-  theme_cowplot()
-
-# Combine
-fig5_p2 / fig5_p1 + plot_layout(heights = c(1, 4))
-# ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_markergenes.pdf", width=8, height=10)
+# fig5_p1 <- do_DotPlot(
+#   sample=seur_integrated[,thymocytes_cellid],
+#   features=genes_dotplot,
+#   group.by = "clusters_integrated_data",
+#   legend.position = "right",
+#   use_viridis = T,
+#   viridis.palette = "B",
+#   flip=T
+#   )+
+#   # coord_flip()+
+#   theme(axis.text.x=element_text(angle=0, hjust=0.5),
+#         axis.text.y=element_text(face="italic"))
+plot_DotPlot(
+  seurobj = seur_integrated[,thymocytes_cellid],
+  group = "clusters_integrated_data",
+  genes=genes_dotplot,
+  scaling=T
+)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_markergenes_vertical_scaled.pdf", width=5, height=10)
 ```
+
 Dotplot horizontal
 ```{r fig5_markergenes2, fig.height=5, fig.width=10}
 # DotPlot
@@ -161,7 +176,25 @@ do_DotPlot(
         axis.text.x=element_text(face="italic"))
 
 # Save
-ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_markergenes2.pdf", width=12, height=5)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_markergenes_horizontal.pdf", width=12, height=5)
+```
+
+
+## Cell hashing distribution by cluster
+```{r fig5_cellhashing_nbcells}
+# Barplot of nb of cells
+seur_integrated@meta.data %>%
+  as_data_frame() %>%
+  filter(tissue=="Thymus") %>%
+  group_by(clusters_integrated_data, tcell_lineage) %>%
+  count() %>%
+  ggplot(aes(x=clusters_integrated_data, y=n, fill=tcell_lineage))+
+  geom_bar(stat="identity")+
+  scale_fill_manual(values=cols_lineages, name="Cell hashing")+
+  scale_y_continuous(expand = c(0, 0))+
+  # scale_x_discrete(position="top")+
+  labs(x="", y="# thymocytes")+
+  theme_cowplot()
 ```
 
 
@@ -172,15 +205,18 @@ seur_integrated@meta.data %>%
   as_data_frame() %>%
   group_by(clusters_integrated_data, tissue) %>%
   count() %>%
+  group_by(clusters_integrated_data) %>%
+  mutate(freq=n*100/sum(n)) %>%
   mutate(tissue=as.character(tissue)) %>%
   # plot
-  ggplot(aes(x=clusters_integrated_data, y=n, fill=tissue))+
-  geom_bar(stat="identity", position="fill")+
+  ggplot(aes(x=clusters_integrated_data, y=freq, fill=tissue))+
+  geom_bar(stat="identity")+
   scale_fill_manual(values=cols_tissue, name="Tissue")+
   theme_cowplot()+
-  labs(x="Clusters", y="Frequency")
-# ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_tissue_distribution.pdf", width=7, height=4)
+  labs(x="Clusters", y="Frequency (%)")
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/ch2_fig5_tissue_distribution.pdf", width=7, height=4)
 ```
+
 
 
 
