@@ -88,12 +88,12 @@ do_DimPlot(
     group.by="clusters_integrated_data",
     colors.use = cols_integrated,
     label=T,
-    legend.position="none",
+    legend.position="right",
     pt.size=4,
     raster=T,
     raster.dpi = 2048
 )
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_clusters.pdf", width=6, height=6)
+ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_clusters.pdf", width=7, height=6)
 ```
 
 
