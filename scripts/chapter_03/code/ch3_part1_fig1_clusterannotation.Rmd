@@ -71,6 +71,23 @@ featureplot_save <- function(seurobj=seur_integrated, genes=c("CD4", "CD8A", "CD
 
 # ANALYSIS
 
+## Integrated clustering separated by tissue
+```{r fig1_clusters_by_tissue, fig.width=20, fig.height=5}
+# Highlight thymocytes
+do_DimPlot(
+    sample = seur_integrated,
+    group.by="clusters_integrated_data",
+    split.by="tissue",
+    colors.use = cols_integrated,
+    legend.position="none",
+    pt.size=5,
+    raster=T,
+    raster.dpi = 2048
+)
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig1_clusters_by_tissue.pdf", width=18, height=6)
+```
+
+
 ## FeaturePlot with CD4 and CD8
 ```{r umap-CD4-CD8}
 genes_to_plot <- c("CD4", "CD8A", "CD8B", "ZBTB7B", "CD40LG", "RUNX3", "LINC02446")
@@ -101,7 +118,6 @@ for(gene in genes_to_plot){
 # Supp Fig 3A, but only on thymocytes
 pbmc_cellid <- rownames(seur_integrated@meta.data[seur_integrated@meta.data$tissue=="PBMC",])
 length(pbmc_cellid)
-
 genes_dotplot <- c(
   "CD4", "CD8A", "CD8B", # coreceptors
   "EGR1", "EGR3", "NR4A1", # Agonist
@@ -114,6 +130,18 @@ genes_dotplot <- c(
   "FOS", "JUN", "JUNB", # AP1 signaling
   "EOMES", "TBX21", "RORA", "RORC", "GZMK", "GZMB", "GNLY", "PRF1", "NKG7", "KLRB1", "IFNG", "CCR6" # Effector
   )
+
+
+genes_dotplot <- c(
+  # coreceptors
+  "CD4",
+  "CD8A",
+  "CD8B",
+  # Tnaive & Tcm
+  "CCR7",
+  "SELL",
+  )
+
 
 # DotPlot
 fig5_p1 <- do_DotPlot(
@@ -148,9 +176,22 @@ fig5_p2 / fig5_p1 + plot_layout(heights = c(1, 4))
 # ggsave("~/Projects/phd/scripts/chapter_02/figs/figs_unfinished/ch2_fig5_markergenes.pdf", width=8, height=10)
 ```
 
-## Analysis 1
-```{r analysis-1}
 
+## Cell hashing distribution by cluster
+```{r fig1_cellhashing_nbcells}
+# Barplot of nb of cells
+seur_integrated@meta.data %>%
+  as_data_frame() %>%
+  filter(tissue=="PBMC") %>%
+  group_by(clusters_integrated_data, tcell_lineage) %>%
+  count() %>%
+  ggplot(aes(x=clusters_integrated_data, y=n, fill=tcell_lineage))+
+  geom_bar(stat="identity")+
+  scale_fill_manual(values=cols_lineages, name="Cell hashing")+
+  scale_y_continuous(expand = c(0, 0))+
+  labs(x="", y="# T cells")+
+  theme_cowplot()
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig1_cellhashing_per_cluster.pdf", width=8, height=4)
 ```
 
 
