@@ -134,7 +134,7 @@ plot_barplot <- function(seurobj){
     # scale_x_continuous(breaks = 1:2, labels = c("Clusters integrated data", "Clusters per lineage"))+
     labs(x="", y="# cells")+
     theme_bw()+
-    guides(fill=guide_legend(reverse=T))+
+    guides(fill=guide_legend(reverse=T, ncol=2))+
     theme(panel.grid = element_blank(),
           axis.text.x=element_text(angle=45, hjust=1))
   return(p)
@@ -150,11 +150,12 @@ plot_DotPlot <- function(seurobj, features, scaling=F){
     scale=scaling
   )
   # plot in personalized way
-  p <- ggplot(p$data, aes(x=features.plot, y=id, fill=avg.exp.scaled, size=pct.exp))+
+  p <- ggplot(p$data, aes(x=id, y=features.plot, fill=avg.exp.scaled, size=pct.exp))+
     geom_point(color="black", shape=21)+
     scale_size_continuous(range=c(0,6), limits=c(0,100), name="%cells\nexpressing\ngene")+
     theme_bw()+
-    theme(axis.text.x=element_text(face="italic", angle=45, hjust=1))+
+    theme(axis.text.y=element_text(face="italic"),
+          axis.text.x=element_text(angle=45, hjust=1))+
     labs(y="", x="")
   # different color scale if scaled or not
   if(scaling==T){
@@ -217,7 +218,7 @@ get_markergenes <- function(seurobj){
 # PLOT SEURAT OBJECTS
 
 ## CD4
-```{r cd4, fig.width=22, fig.height=6, message=F}
+```{r cd4, fig.width=6, fig.height=15, message=F}
 cd4_p1 <- plot_UMAP(seur_thym$cd4, col_vector=cols_thym_cd4)
 # plot_alluvial(seur_thym$cd4)
 cd4_p2 <- plot_barplot(seur_thym$cd4)
@@ -241,13 +242,14 @@ markergenes_cd4_list <- append(markergenes_cd4_list, "ZBTB7B", after=18)
 cd4_p3 <- plot_DotPlot(seurobj = seur_thym$cd4, features=markergenes_cd4_list, scaling=T)
 
 # combine plots !
-cd4_p1 + cd4_p2 + cd4_p3 + plot_layout(widths=c(1,1,1.5))
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_cd4.pdf", width=22, height=6)
+# cd4_p1 + cd4_p2 + cd4_p3 + plot_layout(widths=c(1,1,1.5))
+cd4_p1 / cd4_p2 / cd4_p3 + plot_layout(heights=c(1,1,2))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_cd4_vertical.pdf", width=6, height=15)
 ```
 
 
 ## CD8
-```{r cd8, fig.width=22, fig.height=6, message=F}
+```{r cd8, fig.width=6, fig.height=15, message=F}
 cd8_p1 <- plot_UMAP(seur_thym$cd8, col_vector=cols_thym_cd8)
 cd8_p2 <- plot_barplot(seur_thym$cd8)
 # cd8_p3 <- plot_markergenes(seur_thym$cd8)
@@ -275,13 +277,14 @@ markergenes_cd8_list <- append(markergenes_cd8_list, "CCR7", after=23)
 cd8_p3 <- plot_DotPlot(seurobj = seur_thym$cd8, features=markergenes_cd8_list, scaling=T)
 
 # combine plots!
-cd8_p1 + cd8_p2 + cd8_p3 + plot_layout(widths=c(1,1,1.5))
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_cd8.pdf", width=22, height=6)
+# cd8_p1 + cd8_p2 + cd8_p3 + plot_layout(widths=c(1,1,1.5))
+cd8_p1 / cd8_p2 / cd8_p3 + plot_layout(heights=c(1,1,2))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_cd8_vertical.pdf", width=6, height=15)
 ```
 
 
 ## iNKT
-```{r nkt, fig.width=22, fig.height=6, message=F}
+```{r nkt, fig.width=6, fig.height=15, message=F}
 nkt_p1 <- plot_UMAP(seur_thym$nkt, col_vector=cols_thym_nkt)
 nkt_p2 <- plot_barplot(seur_thym$nkt)
 
@@ -300,13 +303,14 @@ markergenes_nkt_list <- markergenes_nkt %>%
 
 nkt_p3 <- plot_DotPlot(seurobj = seur_thym$nkt, features=markergenes_nkt_list, scaling=T)
 
-nkt_p1 + nkt_p2 + nkt_p3 + plot_layout(widths=c(1,1,1.5))
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_nkt.pdf", width=22, height=6)
+# nkt_p1 + nkt_p2 + nkt_p3 + plot_layout(widths=c(1,1,1.5))
+nkt_p1 / nkt_p2 / nkt_p3 + plot_layout(heights=c(1,1,2))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_nkt_vertical.pdf", width=6, height=13)
 ```
 
 
 ## MAIT
-```{r mait, fig.width=22, fig.height=6, message=F}
+```{r mait, fig.width=6, fig.height=15, message=F}
 mait_p1 <- plot_UMAP(seur_thym$mait, col_vector=cols_thym_mait)
 mait_p2 <- plot_barplot(seur_thym$mait)
 
@@ -325,13 +329,14 @@ markergenes_mait_list <- markergenes_mait %>%
 
 mait_p3 <- plot_DotPlot(seurobj = seur_thym$mait, features=markergenes_mait_list, scaling=T)
 
-mait_p1 + mait_p2 + mait_p3 + plot_layout(widths=c(1,1,1.5))
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_mait.pdf", width=22, height=6)
+# mait_p1 + mait_p2 + mait_p3 + plot_layout(widths=c(1,1,1.5))
+mait_p1 / mait_p2 / mait_p3 + plot_layout(heights=c(1,1,2))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_mait_vertical.pdf", width=6, height=13)
 ```
 
 
 ## $\gamma\delta$T
-```{r gdt, fig.width=22, fig.height=6, message=F}
+```{r gdt, fig.width=10, fig.height=6, message=F}
 gdt_p1 <- plot_UMAP(seur_thym$gdt, col_vector=cols_thym_gdt)
 gdt_p2 <- plot_barplot(seur_thym$gdt)
 
@@ -350,8 +355,9 @@ markergenes_gdt_list <- markergenes_gdt %>%
 
 gdt_p3 <- plot_DotPlot(seurobj = seur_thym$gdt, features=markergenes_gdt_list, scaling=T)
 
-gdt_p1 + gdt_p2 + gdt_p3 + plot_layout(widths=c(1,1,1.5))
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_gdt.pdf", width=22, height=6)
+# gdt_p1 + gdt_p2 + gdt_p3 + plot_layout(widths=c(1,1,1.5))
+(((gdt_p1 / plot_spacer() / gdt_p2) + plot_layout(heights=c(1,0.4,1))) | gdt_p3) + plot_layout(widths=c(1,1.2))
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/appendix1_markergenes/ch2_suppfigure_gdt_vertical.pdf", width=10, height=8)
 ```
 
 
