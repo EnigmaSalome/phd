@@ -93,7 +93,7 @@ do_DimPlot(
     raster=T,
     raster.dpi = 2048
 )
-ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_clusters.pdf", width=7, height=6)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section1/ch2_fig5_clusters.pdf", width=7, height=6)
 ```
 
 
