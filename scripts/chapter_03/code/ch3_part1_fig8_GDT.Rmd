@@ -176,32 +176,31 @@ The marker genes were chosen based on:
 ```{r dotplot-marker-genes, fig.height=5, message=F, warning=F}
 genes_dotplot <- c(
   "ZBTB16",
+  # "ZNF683",
   # ------
-  # Tnaive
+  # GD naive
   "CCR7",
   "SELL",
   "TCF7",
   "LEF1",
+  "IL7R",
+  # "CD27",
   # ------
-  # GDT stages
-  "CD27",
+  # VD2VG9 GDT stages
+  "CD4",
   "KLRB1",
-  "IL18R1",
+  # "IL18R1",
   # ------
   # Coreceptors
-  "CD4",
-  "CD8A",
-  "CD8B",
-  # ------
-  # Stage 3 GDTs
-  # "CEBPD",
+  # "CD8A",
+  # "CD8B",
   # ------
   # GDT1
   "TBX21",
   "EOMES",
   "IFNG",
-  "TNF",
-  "CCR5",
+  # "TNF",
+  # "CCR5",
   "IL2RB",
   "SLAMF7",
   # ------
@@ -209,18 +208,20 @@ genes_dotplot <- c(
   "RORC",
   "RORA",
   "CCR6",
-  "IL7R",
   "IL23R",
-  "KLRG1",
   # ------
-  # Cytotoxicity
-  "PRF1",
+  # GZMK vs GZMB
+  "GZMK",
   "GNLY",
   "GZMA",
-  "GZMK",
+  "PRF1",
   "GZMB",
   "CX3CR1",
-  "NCAM1" # CD56
+  # "NCAM1", # CD56
+  # -------
+  # Prolif
+  "MKI67",
+  "CDK1"
   )
 
 # get list of cell id to plot (remove clusters with less than 100 cells)
@@ -230,19 +231,78 @@ plot_DotPlot(
   features=genes_dotplot,
   scaling=F
   )
-# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig6_gdt_markergenes.pdf", width=5, height=6)
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig8_gdt_markergenes.pdf", width=5, height=6)
 ```
 
 
 ## Nebulosa plot genes of interest
-```{r, fig.height=8, fig.width=6}
+```{r nebulosa-plot, fig.height=8, fig.width=6}
 lineage_nebulosagenes(
   seur_pbmc_gdt,
-  genes_vector=c("ZBTB16", "CD27", "KLRB1", "IL18R1", "GZMK", "GZMB"),
-  # file_name="ch3_fig6_gdt_nebulosaplots.pdf",
+  genes_vector=c("CCR7", "ZBTB16", "GZMK", "GZMB"),
+  # file_name="ch3_fig8_gdt_nebulosaplots.pdf",
   pgrid_ncol=2,
-  pgrid_size=c(10, 15)
+  pgrid_size=c(10, 10)
 )
+```
+
+## V delta gene usage
+First clean up data a bit
+```{r TCRdelta-usage}
+gd.tcr <- seur_pbmc_gdt@meta.data %>%
+  rownames_to_column("cellid") %>%
+  as_tibble() %>%
+  select(cellid, clusters_per_lineage, grep("_gene_Dominant", colnames(seur_pbmc_gdt@meta.data), value=T)) %>%
+  dplyr::rename(TRGV = TCR_Alpha_Gamma_V_gene_Dominant,
+                TRGJ = TCR_Alpha_Gamma_J_gene_Dominant,
+                TRDV = TCR_Beta_Delta_V_gene_Dominant,
+                TRDD = TCR_Beta_Delta_D_gene_Dominant,
+                TRDJ = TCR_Beta_Delta_J_gene_Dominant) %>%
+  na.omit(!clusters_per_lineage) %>%
+  mutate(TRGV = str_remove(TRGV, pattern = "\\*[^.]*$"),
+         TRGJ = str_remove(TRGJ, pattern = "\\*[^.]*$"),
+         TRDV = str_remove(TRDV, pattern = "\\*[^.]*$"),
+         TRDD = str_remove(TRDD, pattern = "\\*[^.]*$"),
+         TRDJ = str_remove(TRDJ, pattern = "\\*[^.]*$")) %>%
+  filter(!TRGV %in% grep("TRA", TRDV, value=T)) %>%
+  filter(!TRDD %in% grep("TRB", TRDD, value=T)) %>%
+  filter(!TRDJ %in% grep("TRB", TRDJ, value=T))
+dim(gd.tcr)
+```
+We have TCR information for 1,569 cells out of 10,160. Let's highlight TRDV1, TRDV2, TRDV3
+```{r gdt-tcr-highlight-trdv, fig.height=7, fig.width=9}
+highlight_TCRusage <- function(seurobj=seur_pbmc_gdt, cells, ptitle, cellscolor){
+  p <- do_DimPlot(
+      sample = seurobj,
+      cells.highlight = cells,
+      plot.title = ptitle,
+      legend.position = "none",
+      na.value = "grey90",
+      colors.use = cellscolor
+    )
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)
+  return(p)
+}
+
+# highlight TRDV1, TRDV2, TRDV3 and TRGV9
+# plot_grid(
+#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV1","cellid"]), plot.title = "TRDV1",
+#                      legend.position = "none", na.value = "grey90", colors.use = "#a40000"),
+#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV2","cellid"]), plot.title = "TRDV2",
+#                      legend.position = "none", na.value = "grey90", colors.use = "blue"),
+#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV3","cellid"]), plot.title = "TRDV3",
+#                      legend.position = "none", na.value = "grey90", colors.use = "#318f49"),
+#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV2"&gd.tcr$TRGV=="TRGV9","cellid"]), plot.title = "VD2-VG9",
+#                      legend.position = "none", na.value = "grey90", colors.use = "cyan"),
+#   nrow=2)
+plot_grid(
+  highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV1","cellid"]), ptitle = "TRDV1", cellscolor = "#a40000"),
+  highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV2","cellid"]), ptitle = "TRDV2", cellscolor = "blue"),
+  highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV2"&gd.tcr$TRGV=="TRGV9","cellid"]), ptitle = "VD2+VG9+", cellscolor = "lightblue"),
+  highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV3","cellid"]), ptitle = "TRDV3", cellscolor = "#318f49"),
+  highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRGV=="TRGV9","cellid"]), ptitle = "VG9", cellscolor = "gold"),
+  nrow=2)
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig8_gdt_tcr_trdv.pdf", width=9, height=6)
 ```
 
 
@@ -269,9 +329,10 @@ seur_gdt@meta.data$clusters_per_lineage_annotated <- case_when(
   seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c6" ~ "GDT immature (c6)",
   seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c7" ~ "GDT memory (c7)",
   seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c0" ~ "GDT naive (c0)",
-  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c1" ~ "GDT (c1)",
-  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c2" ~ "GDT (c2)",
-  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c3" ~ "GDT GZMB+ (c3)"
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c1" ~ "GDT VD2VG9 GZMK+ (c1)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c2" ~ "GDT GZMK+ (c2)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c3" ~ "GDT GZMB+ (c3)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c4" ~ "GDT prolif (c4)"
 )
 # table(seur_gdt@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
 
@@ -286,7 +347,7 @@ se_gdt <- SummarizedExperiment(
 # seur_pbmc_gdt <- readRDS("./data/seurat_objects/pbmc_objects/blood.GDT_03_16_23.RDS")
 # hvg_gdt_joint <- union(VariableFeatures(seur_thym_gdt), VariableFeatures(seur_pbmc_gdt))
 hvg_gdt <- VariableFeatures(FindVariableFeatures(seur_gdt))
-length(intersect(VariableFeatures(seur_integrated), hvg_gdt)) # 1028 genes
+length(intersect(VariableFeatures(seur_integrated), hvg_gdt)) # 1116 genes
 # length(intersect(hvg_gdt, hvg_gdt_joint))
 ```
 
@@ -324,13 +385,9 @@ heatmap.2(mtn,
           # margins
           margins=c(9,9))
 ```
-To note: the PBMC GDT (c0-2) don't always have the best AUROC with each other (is it because it's overclustered?).
 
 Now re-run it with "tissue" as study_id (will be easier to read).
 ```{r, fig.width=8, fig.height=8}
-# test by removing PBMC cluster c0
-# se_gdt_test <- se_gdt[,rownames(colData(se_gdt)[colData(se_gdt)$clusters_per_lineage_annotated != "GDT (c1)",])]
-
 mtn2 <- MetaNeighborUS(
   # var_genes=VariableFeatures(seur_integrated),
   var_genes=hvg_gdt,
@@ -366,21 +423,21 @@ heatmap.2(mtn2,
 ```
 
 
-
-
 ```{r plot-gdt-mtn, fig.width=10, fig.height=10}
 # library(ggrepel)
 gdt_mtn_order <- c(
   "Thymus|GDT DP (c0)",
-  "Thymus|GDT CD8aa (c1)",
-  "Thymus|GDT CCR9+ (c2)",
-  "Thymus|GDT CCR7+ (c3)",
-  "Thymus|GDT CCR7+ (c4)",
-  "Thymus|GDT CCR7+ (c5)",
-  "Thymus|GDT memory (c6)",
-  "PBMC|GDT (c0)",
-  "PBMC|GDT (c1)",
-  "PBMC|GDT (c2)",
+  "Thymus|GDT TCRrearrange (c1)",
+  "PBMC|GDT naive (c0)",
+  "Thymus|GDT TCRrearrange (c2)",
+  "Thymus|GDT TCRsignaling (c3)",
+  "Thymus|GDT ISPp (c4)",
+  "PBMC|GDT prolif (c4)",
+  "Thymus|GDT immature (c5)",
+  "Thymus|GDT immature (c6)",
+  "Thymus|GDT memory (c7)",
+  "PBMC|GDT VD2VG9 GZMK+ (c1)",
+  "PBMC|GDT GZMK+ (c2)",
   "PBMC|GDT GZMB+ (c3)"
 )
 
@@ -449,8 +506,214 @@ hm.clean <- ggplot(mtn.df, aes(x=Var1, y=Var2)) +
         axis.text.x=element_text(angle=45, hjust=1)
   )
 (bp.x+plot_spacer() + plot_layout(widths = c(5, 1))) / (hm.clean + bp.y + plot_layout(widths = c(5, 1))) + plot_layout(heights = c(1, 5))
-# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig6_gdt_mtn_thymuspbmc.pdf",
-#        width=8, height=8)
+
+# ggsave(
+#   # plot = hm.clean,
+#   filename = "~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig8_gdt_mtn_thymuspbmc.pdf",
+#   width = 9,
+#   height = 9
+# )
+```
+
+
+## Metaneighbor on equal number of cells
+Let's try to randomly sample cells from each cluster, to have equal number of cells per cluster, and see how robust the metaneighbor results are. Let's run it on the list of HVGs.
+```{r gdt-metaneighbor-subset-100sampling, fig.height=7, fig.width=7}
+# Randomly sample x number of cells per cluster
+randomcells_list <- list()
+mtn_list <- list()
+for(i in 1:1000){
+  cat("\nRandom sampling #", i, "\n")
+  randomcells_vector <- c()
+  mtn_subset <- NULL
+  
+  # RANDOMLY SAMPLE CELLS
+  for(cluster in unique(se_gdt$clusters_per_lineage_annotated)){
+    # print(cluster)
+    randomcells <- NULL
+
+    # if it's a thymus cluster
+    if (cluster %in% c(
+      "GDT DP (c0)",
+      "GDT TCRrearrange (c1)",
+      "GDT TCRrearrange (c2)",
+      "GDT TCRsignaling (c3)",
+      "GDT ISPp (c4)",
+      "GDT immature (c5)",
+      "GDT immature (c6)",
+      "GDT memory (c7)"
+    )) {
+      nbcells_to_sample <- 27 # 27
+      allcells <- rownames(colData(se_gdt)[colData(se_gdt)$clusters_per_lineage_annotated==cluster,])
+      # cat("Total nb of cells:", length(allcells), "\n")
+      # set.seed(123)
+      randomcells <- sample(allcells, nbcells_to_sample)
+      # cat("Nb of sampled cells:", length(randomcells), "\n")
+      # sanity check they all come from same cluster
+      # cat("Cluster sampled cells come from:", unique(colData(se_gdt)[randomcells, "clusters_per_lineage_annotated"]), "\n\n")
+    }
+    
+    # if it's a pbmc cluster
+    else if (cluster %in% c(
+      "GDT naive (c0)",
+      "GDT VD2VG9 GZMK+ (c1)",
+      "GDT GZMK+ (c2)",
+      "GDT GZMB+ (c3)",
+      "GDT prolif (c4)"
+    )){
+      nbcells_to_sample <- 27 # 56
+      allcells <- rownames(colData(se_gdt)[colData(se_gdt)$clusters_per_lineage_annotated==cluster,])
+      # cat("Total nb of cells:", length(allcells), "\n")
+      # set.seed(123)
+      randomcells <- sample(allcells, nbcells_to_sample)
+      # cat("Nb of sampled cells:", length(randomcells), "\n")
+      # cat("Cluster sampled cells come from:", unique(colData(se_gdt)[randomcells, "clusters_per_lineage_annotated"]), "\n\n")
+      
+    }
+    
+    randomcells_vector <- c(randomcells_vector, randomcells)
+    # print(length(randomcells_vector))
+  }
+  
+  # Subset Summarized Experiment object to the randomly selected cells
+  se_gdt_subset <- se_gdt[,randomcells_vector]
+  table(colData(se_gdt_subset)$clusters_per_lineage_annotated)
+  
+  
+  # re-run metaneighbor
+  mtn_subset <- MetaNeighborUS(var_genes=hvg_gdt,
+                               dat=se_gdt_subset,
+                               study_id=se_gdt_subset$tissue,
+                               cell_type=se_gdt_subset$clusters_per_lineage_annotated,
+                               fast_version=T)
+  
+  # save
+  randomcells_list[[i]] <- randomcells_vector
+  mtn_list[[i]] <- mtn_subset
+}
+
+length(randomcells_list)
+length(mtn_list)
+
+# sanity check that different cells were sampled at each round
+table(randomcells_list[[1]] %in% randomcells_list[[2]])
+
+# get mean and sd of all the metaneighbor matrices
+mtn_mean <- apply(simplify2array(mtn_list), 1:2, mean)
+mtn_sd <- apply(simplify2array(mtn_list), 1:2, sd)
+
+# check the distribution of SD (very low SD across random samplings, which is good!)
+ggplot(melt(mtn_sd), aes(x=value))+
+  geom_histogram(bins=200, color="black", fill="white")+
+  scale_x_continuous(expand=c(0,0), limits=c(0,1))+
+  # scale_y_continuous(expand=c(0,0), limits=c(0,70))+
+  labs(x="AUROC standard deviation", y="# AUROC values", title="Distribution of SD of AUROC values")+
+  theme(panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank())
+# ggsave("./data/figures/chapter_03/figs_unfinished/suppfigures/gdt_crosspecies_100randomcellsampling_sd_auroc_hist.pdf", width=7, height=6)
+
+# get nb of cells in subsetted data
+ncells.df_sampling <- colData(se_gdt_subset) %>%
+  as_data_frame() %>%
+  group_by(tissue, clusters_per_lineage_annotated) %>%
+  dplyr::count() %>%
+  mutate(var=paste(tissue, clusters_per_lineage_annotated, sep="|")) %>%
+  ungroup() %>%
+  dplyr::select(n, var)
+```
+
+```{r gdt-metaneighbor-subset-100sampling-plot, fig.height=7, fig.width=7}
+# pdf(
+#   file = "./data/figures/chapter_04/figs_unfinished/suppfigures/gdt_crosspecies_100randomcellsampling_mean_auroc_heatmap.pdf",
+#   width = 5.5,
+#   height = 5.5
+#   )
+# heatmap
+heatmap.2(
+  mtn_mean,
+  trace = "none",
+  # superimpose a density histogram on color key
+  density.info = "none",
+  # color scale
+  col = rev(colorRampPalette(brewer.pal(11, "RdYlBu"))(100)),
+  breaks = seq(0, 1, length = 101),
+  key.xlab = "AUROC",
+  key.title = "",
+  # text labels
+  main = "Thymic vs PBMC GDT",
+  cexRow = 0.6,
+  cexCol = 0.6,
+  # margins
+  margins = c(7, 7)
+)
+# dev.off()
+```
+
+```{r,fig.width=10, fig.height=10}
+# final df for plotting
+mtn.df_sampling <- melt(mtn_mean) %>%
+  dplyr::rename(auroc=value) %>%
+  left_join(ncells.df_sampling, by=c("Var1"="var")) %>%
+  dplyr::rename(Var1_ncells=n) %>%
+  left_join(ncells.df_sampling, by=c("Var2"="var")) %>%
+  dplyr::rename(Var2_ncells=n) %>%
+  mutate(Var1=factor(Var1, levels=gdt_mtn_order),
+         Var2=factor(Var2, levels=gdt_mtn_order))
+  
+# barplots
+bp.x_sampling <- ggplot(data=mtn.df_sampling%>% select(Var1,Var1_ncells) %>% distinct(),
+               aes(x=Var1, y=Var1_ncells))+
+  geom_bar(stat="identity", fill="#bdbdbd") + theme_cowplot()+
+  scale_x_discrete(position="top")+
+  labs(y="# cells")+
+  theme(axis.text = element_text(size=8),
+        # axis.text.x = element_text(size = 8, angle=45, hjust=0),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x=element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y=element_text(size=8),
+        legend.position = "none")
+
+bp.y_sampling <- ggplot(data=mtn.df_sampling%>% select(Var2,Var2_ncells) %>% distinct(),
+               aes(x=Var2, y=Var2_ncells))+
+  geom_bar(stat="identity", fill="#bdbdbd") +
+  scale_x_discrete(position="top") +
+  labs(y="# cells")+ coord_flip() + theme_cowplot()+
+  theme(axis.title.y = element_blank(),
+        axis.text = element_text(size=8),
+        axis.text.y=element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_text(size=8),
+        axis.line.y=element_blank(),
+        legend.position = "none")
+
+
+# BUBBLE PLOT
+hm.clean_sampling <- ggplot(mtn.df_sampling, aes(x=Var1, y=Var2)) +
+  geom_point(aes(size = abs(auroc-0.5), color= auroc))+
+  geom_text(data=mtn.df_sampling %>% filter(auroc>0.8 | auroc < 0.1) %>% mutate(across("auroc", \(x) round(x,2))), aes(label=auroc), color="white", size=3)+
+  scale_size_continuous(limits=c(0,1), breaks=seq(0,1, by=0.2), range = c(0, 20), guide="none")+
+  scale_color_gradient2(low="#2166ac", mid="white", high="#a50f15", midpoint=0.5, limits=c(0,1), name="AUROC", breaks=seq(0,1, by=0.2))+
+  labs(x="",y="", size="AUROC")+
+  theme_cowplot()+
+  theme(legend.position="bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text = element_text(size=8),
+        axis.title=element_text(size=8),
+        axis.text.x=element_text(angle=45, hjust=1)
+  )
+
+(bp.x_sampling+plot_spacer() + plot_layout(widths = c(5, 1))) / (hm.clean_sampling + bp.y_sampling + plot_layout(widths = c(5, 1))) + plot_layout(heights = c(1, 5))
+
+# ggsave(
+#   # plot = hm.clean,
+#   filename = "~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig8_gdt_mtn_thymuspbmc_equalnbcells_1000samples.pdf",
+#   width = 9,
+#   height = 9
+# )
 ```
 
 
