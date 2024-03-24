@@ -93,7 +93,7 @@ plot_DotPlot <- function(seurobj, group, features, scaling=T){
 }
 
 
-lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
+lineage_genesignature <- function(seuratobj, genesignature, file_name="no", ordercells=T){
   minimum_genesignature <- min(seuratobj@meta.data[,genesignature])
   minimum_to_plot <- ifelse(minimum_genesignature<0, 0, minimum_genesignature)
   p <- ggrastr::rasterise(
@@ -104,7 +104,7 @@ lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
     use_viridis = T,
     viridis.palette = "E",
     legend.position="right",
-    order=T,
+    order=ordercells,
     pt.size = 1.5,
     raster=F
     # raster.dpi=2048,
@@ -120,6 +120,33 @@ lineage_genesignature <- function(seuratobj, genesignature, file_name="no"){
            width=9, height=6)
   }
 }
+
+plot_beeswarm <- function(seurobj=seur_pbmc, feature, ytitle, file_name="no"){
+  p <- ggplot(
+    as.data.frame(seurobj@meta.data),
+    aes_string(x="clusters_integrated_data", y=feature, fill="clusters_integrated_data")
+  ) +
+    # geom_violin(alpha=0.5, width=1.5,color=NA) +
+    ggbeeswarm::geom_quasirandom(shape = 21, size=2, width = .4, color="black", show.legend = F, stroke=0.1)+
+    scale_fill_manual(values=cols_integrated)+
+    labs(x="", y=ytitle)+
+    ylim(c(0, max(seurobj@meta.data[,feature])))+
+    theme_classic()+
+    theme(
+      legend.position="none",
+      axis.line = element_blank(),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
+    )
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)
+  print(p)
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig1_literature_signatures/", file_name),
+           plot=p,
+           width=8, height=5)
+  }
+  # return(p)
+}
+
 ```
 
 
@@ -343,50 +370,44 @@ gene_signatures_df[["rose"]] <- rosetotal
 
 
 # TEREKHOVA ET AL.
-genes.terekhova_general <- readxl::read_excel("./data/litterature_gene_signatures/terekhova_supptable.xlsx", sheet=1)
+# genes.terekhova_general <- readxl::read_excel("./data/litterature_gene_signatures/terekhova_supptable.xlsx", sheet=1)
 genes.terekhova_cd4 <- readxl::read_excel("./data/litterature_gene_signatures/terekhova_supptable.xlsx", sheet=3)
 genes.terekhova_cd8 <- readxl::read_excel("./data/litterature_gene_signatures/terekhova_supptable.xlsx", sheet=5)
-genes.terekhova_gdt <- readxl::read_excel("./data/litterature_gene_signatures/terekhova_supptable.xlsx", sheet=7)
+# genes.terekhova_gdt <- readxl::read_excel("./data/litterature_gene_signatures/terekhova_supptable.xlsx", sheet=7)
 # Clean up and extract signatures
 # head(genes.terekhova_cd4)
-terekhovadf <- cbind(genes.terekhova_general[,"MAITcells"], genes.terekhova_cd4, genes.terekhova_cd8, genes.terekhova_gdt) %>%
+terekhovadf <- cbind(genes.terekhova_cd4, genes.terekhova_cd8) %>%
   pivot_longer(cols=everything(), names_to="geneprogram", values_to = "gene") %>%
   mutate(geneprogram=paste0("Terekhova | ", geneprogram),
          geneprogram_cat=case_when(
-           geneprogram=="Terekhova | MAITcells"                ~ "terekhova_MAIT",
-           geneprogram=="Terekhova | CD4_Tnaive"               ~ "terekhova_Tnaive_CD4",
+           geneprogram=="Terekhova | CD4_Tnaive"               ~ "terekhova_Tnaive",
            geneprogram=="Terekhova | CD4_Tnaive_IFN"           ~ "terekhova_Tnaive_IFN",
            geneprogram=="Terekhova | CD4_Tfh"                  ~ "terekhova_Tcm",
-           geneprogram=="Terekhova | CD4_Th1"                  ~ "terekhova_Tcm",
+           # geneprogram=="Terekhova | CD4_Th1"                  ~ "terekhova_Tcm",
            geneprogram=="Terekhova | CD4_Th1/Th17"             ~ "terekhova_Tem",
            geneprogram=="Terekhova | CD4_Th17"                 ~ "terekhova_Tem",
            geneprogram=="Terekhova | CD4_Th22"                 ~ "terekhova_Tem",
            geneprogram=="Terekhova | CD4_Th2"                  ~ "terekhova_Tcm",
            geneprogram=="Terekhova | CD4_HLADRpos_memory"      ~ "terekhova_Tem",
-           geneprogram=="Terekhova | CD4_Exhausted-like_memory"~ "terekhova_Tcm",
+           # geneprogram=="Terekhova | CD4_Exhausted-like_memory"~ "terekhova_Tcm",
            geneprogram=="Terekhova | CD4_Terminal_effector"    ~ "terekhova_Temra",
            geneprogram=="Terekhova | CD4_Temra"                ~ "terekhova_Temra",
-           geneprogram=="Terekhova | CD4_Treg_cytotoxic"       ~ "terekhova_Treg",
+           # geneprogram=="Terekhova | CD4_Treg_cytotoxic"       ~ "terekhova_Treg",
            geneprogram=="Terekhova | CD4_Treg_naive"           ~ "terekhova_Treg",
-           geneprogram=="Terekhova | CD4_Treg_memory"          ~ "terekhova_Treg",
-           geneprogram=="Terekhova | CD4_Treg_KLRB1+_RORC+"    ~ "terekhova_Treg",
-           geneprogram=="Terekhova | CD8_Tnaive"        ~ "terekhova_Tnaive_CD8",
+           # geneprogram=="Terekhova | CD4_Treg_memory"          ~ "terekhova_Treg",
+           # geneprogram=="Terekhova | CD4_Treg_KLRB1+_RORC+"    ~ "terekhova_Treg",
+           geneprogram=="Terekhova | CD8_Tnaive"        ~ "terekhova_Tnaive",
            geneprogram=="Terekhova | CD8_Tnaive_IFN"    ~ "terekhova_Tnaive_IFN",
            geneprogram=="Terekhova | CD8_Tcm_CCR4pos"   ~ "terekhova_Tcm",
            geneprogram=="Terekhova | CD8_Tcm_CCR4neg"   ~ "terekhova_Tcm",
-           geneprogram=="Terekhova | CD8_Trm"           ~ "terekhova_Trm",
-           geneprogram=="Terekhova | CD8_Tmem_KLRC2pos" ~ "terekhova_other",
+           # geneprogram=="Terekhova | CD8_Trm"           ~ "terekhova_Trm",
+           # geneprogram=="Terekhova | CD8_Tmem_KLRC2pos" ~ "terekhova_other",
            geneprogram=="Terekhova | CD8_Tem_GZMKpos"   ~ "terekhova_Tem",
            geneprogram=="Terekhova | CD8_HLADRpos"      ~ "terekhova_Tem",
            geneprogram=="Terekhova | CD8_proliferative" ~ "terekhova_Tprolif",
            geneprogram=="Terekhova | CD8_Tem_GZMBpos"   ~ "terekhova_Temra",
            geneprogram=="Terekhova | CD8_Temra"         ~ "terekhova_Temra",
-           geneprogram=="Terekhova | CD8_NKTlike"       ~ "terekhova_Temra",
-           geneprogram=="Terekhova | GD_naive"     ~ "terekhova_GD_naive",
-           geneprogram=="Terekhova | GD_Vd2_GZMK+" ~ "terekhova_GD_Tem",
-           geneprogram=="Terekhova | GD_Vd2_GZMB+" ~ "terekhova_GD_Tem",
-           geneprogram=="Terekhova | GD_Vd1_GZMK+" ~ "terekhova_GD_Tem",
-           geneprogram=="Terekhova | GD_Vd1_GZMB+" ~ "terekhova_GD_Tem"
+           geneprogram=="Terekhova | CD8_NKTlike"       ~ "terekhova_Temra"
          ))
 gene_signatures_df[["terekhova"]] <- terekhovadf
 
@@ -394,7 +415,7 @@ gene_signatures_df[["terekhova"]] <- terekhovadf
 # Get it all in lists
 longdf <- bind_rows(gene_signatures_df, .id="dataset") %>%
   filter(gene %in% rownames(seur_integrated)) %>%
-  filter(!geneprogram_cat %in% c("terekhova_Trm", "terekhova_other", "terekhova_MAIT"))
+  filter(!is.na(geneprogram_cat))
 # table(longdf$geneprogram_cat, useNA="ifany")
 
 gene_signatures_list <- list()
@@ -403,28 +424,47 @@ for(gp in unique(longdf$geneprogram_cat)){
   genes_in_program <- longdf %>%
     filter(geneprogram_cat==gp & gene %in% rownames(seur_integrated)) %>%
     pull(gene)
-  print(length(genes_in_program))
-  gene_signatures_list[[gp]] <- genes_in_program
+  print(length(unique(genes_in_program)))
+  gene_signatures_list[[gp]] <- unique(genes_in_program)
 }
-# print(lengths(gene_signatures_list))
+print(lengths(gene_signatures_list))
 ```
 
+Score those gene signature on seurat pbmc object.
 ```{r gene-signatures-score}
-seur_pbmc@meta.data
+# seur_pbmc@meta.data
+# seur_pbmc@meta.data[,32:43] <- NULL
 seur_pbmc <- AddModuleScore(seur_pbmc, name = names(gene_signatures_list), features=gene_signatures_list, seed=1)
 
 # Remove the annoying numbers that are being added
-colnames(seur_pbmc@meta.data)[32:45] <- names(gene_signatures_list)
+colnames(seur_pbmc@meta.data)[32:42] <- names(gene_signatures_list)
 ```
 
+Plot these gene signatures on UMAP
 ```{r gene-signatures-plot, fig.height=6, fig.width=6}
-for(gp in names(gene_signatures_list)[7:14]){
+for(gp in names(gene_signatures_list)){
   print(gp)
-  lineage_genesignature(seur_pbmc, gp, file_name = paste0("ch3_fig1_literature_signatures/", gp, ".pdf"))
+  lineage_genesignature(
+    seur_pbmc,
+    gp,
+    # file_name = paste0("ch3_fig1_literature_signatures/", gp, ".pdf"),
+    ordercells = T
+    )
 }
-lineage_genesignature(seur_pbmc, "rose_Tem")
-lineage_genesignature(seur_pbmc, "rose_Tem")
 ```
+
+Plot these gene signatures on violin plots
+```{r gene-signatures-plot}
+for(gp in names(gene_signatures_list)){
+  print(gp)
+  plot_beeswarm(
+    feature = gp,
+    # file_name = paste0("ggswarm_", gp, ".pdf")
+    ytitle = gp
+  )
+}
+```
+
 
 
 

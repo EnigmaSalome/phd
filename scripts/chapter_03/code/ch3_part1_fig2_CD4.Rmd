@@ -95,6 +95,52 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
            width=figwidth, height=5, units="in")
   }
 }
+
+plot_DotPlot <- function(seurobj, group, features, scaling=T){
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=features,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=id, y=features.plot, fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,6), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(
+      axis.text.y=element_text(face="italic"),
+      axis.text.x=element_text(angle=45, hjust=1)
+    )+
+    labs(y="", x="")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")
+  } else{
+    p <- p + viridis::scale_fill_viridis(option="B", direction=-1, name="normalized\navg expression")
+  }
+  return(p)
+}
+
+lineage_nebulosagenes <- function(seuratobj, genes_vector, pgrid_ncol=2, pgrid_size=c(10,30), file_name="no"){
+  
+  pnebulosa <- list()
+  for(gene in genes_vector) {
+    p <- SCpubr::do_NebulosaPlot(seuratobj, features = gene, sequential.palette="YlOrRd")
+    p <- ggrastr::rasterise(p, layers="Point", dpi=200)
+    pnebulosa[[gene]] <- p
+  }
+  pgrid <- plot_grid(plotlist=pnebulosa, ncol=pgrid_ncol)
+  print(pgrid)
+  
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=pgrid,
+           width=pgrid_size[1], height=pgrid_size[2])
+  }
+}
 ```
 
 
@@ -117,6 +163,104 @@ lineage_clustersperdonor(seurobj = seur_pbmc_cd4, col_vector = cols_pbmc_cd4, fi
 
 
 
+# GENES OF INTEREST
+## Dotplot genes on interest
+The marker genes were chosen based on:
+- [Sallusto et al. 1999](https://www.nature.com/articles/44385)
+- [Terekhova et al. 2023](https://www.sciencedirect.com/science/article/pii/S1074761323004533)
+- [Rose et al. 2023](https://www.nature.com/articles/s42003-023-04747-9)
+```{r dotplot-marker-genes, fig.height=5}
+genes_dotplot <- c(
+  # CD4
+  # "CD4",
+  # "ZBTB7B",
+  # "CD40LG",
+  # ------
+  # Treg
+  "IKZF4",
+  "FOXP3",
+  "CTLA4",
+  "IL2RA",
+  # ------
+  # IFN signaling
+  # "ISG15",
+  # "STAT1",
+  # "IFI6",
+  # ------
+  # Tnaive & Tcm
+  "CCR7",
+  "SELL",
+  "TCF7",
+  "LEF1",
+  "CD27",
+  # ------
+  # Tcm
+  # "AHR",
+  # "GPR15",
+  "CCR4",
+  # "IL2",
+  # "IL4",
+  # "IL4R", #CD8!!
+  "CCR6",
+  # "RORC",
+  # "ICOS",
+  # "IL2RA",
+  # ------
+  # Tcm & Tem
+  "AHR",
+  "CD69",
+  "IL7R",
+  # ------
+  # Tem & Temra
+  "GZMK",
+  "CCL5",
+  "EOMES",
+  "KLRG1",
+  # ------
+  # Temra
+  "PRF1",
+  "GNLY",
+  "CX3CR1",
+  "GZMB",
+  "CCL4"
+  # "ZNF683",
+  # # "CXCR3", # very little expression... (same in Terekhova)
+  # "IKZF2",
+  # "TYROBP",
+  # "NCAM1", # CD56
+  # "B3GAT1" # CD57
+  # "IDH2",
+  # "COX8A",
+  # "CYC1"
+  )
+
+# get list of cell id to plot (remove clusters with less than 100 cells)
+plot_DotPlot(
+  seurobj=seur_pbmc_cd4,
+  group="clusters_per_lineage",
+  features=genes_dotplot,
+  scaling=T
+  )
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig2_cd4_markergenes.pdf", width=5, height=5)
+```
+
+
+## Nebulosa plot genes of interest
+```{r, fig.height=8, fig.width=6}
+lineage_nebulosagenes(
+  seur_pbmc_cd4,
+  genes_vector=c("CCR7", "SELL", "CD69", "FOXP3", "GZMK", "GZMB"),
+  file_name="ch3_fig2_cd4_nebulosaplots.pdf",
+  pgrid_ncol=2,
+  pgrid_size=c(10, 15)
+)
+```
+
+
+
+
+
+
 # METANEIGHBOR
 
 ## Metaneighbor thymocytes x pbmcs
@@ -129,7 +273,7 @@ table(seur_cd4@meta.data[,c("clusters_per_lineage", "donor_id")], useNA="ifany")
 
 # rename clusters_per_lineage for easier interpretation of metaneighbor
 seur_cd4@meta.data$clusters_per_lineage_annotated <- case_when(
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c0" ~ "CD4 ISP (c0)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c0" ~ "CD4 ISPq (c0)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c1" ~ "CD4 ISPp (c1)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c2" ~ "DP (c2)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c3" ~ "CD4 CCR9+ (c3)",
