@@ -96,6 +96,53 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
            width=figwidth, height=5, units="in")
   }
 }
+
+
+plot_DotPlot <- function(seurobj, group, features, scaling=T){
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=features,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=id, y=features.plot, fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,6), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(
+      axis.text.y=element_text(face="italic"),
+      axis.text.x=element_text(angle=45, hjust=1)
+    )+
+    labs(y="", x="")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")
+  } else{
+    p <- p + viridis::scale_fill_viridis(option="B", direction=-1, name="normalized\navg expression")
+  }
+  return(p)
+}
+
+lineage_nebulosagenes <- function(seuratobj, genes_vector, pgrid_ncol=2, pgrid_size=c(10,30), file_name="no"){
+  
+  pnebulosa <- list()
+  for(gene in genes_vector) {
+    p <- SCpubr::do_NebulosaPlot(seuratobj, features = gene, sequential.palette="YlOrRd")
+    p <- ggrastr::rasterise(p, layers="Point", dpi=200)
+    pnebulosa[[gene]] <- p
+  }
+  pgrid <- plot_grid(plotlist=pnebulosa, ncol=pgrid_ncol)
+  print(pgrid)
+  
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=pgrid,
+           width=pgrid_size[1], height=pgrid_size[2])
+  }
+}
 ```
 
 
@@ -118,6 +165,87 @@ lineage_clustersperdonor(seurobj = seur_pbmc_nkt, col_vector = cols_pbmc_nkt, fi
 
 
 
+# GENES OF INTEREST
+## Dotplot genes on interest
+The marker genes were chosen based on:
+- [Sallusto et al. 1999](https://www.nature.com/articles/44385)
+- [Terekhova et al. 2023](https://www.sciencedirect.com/science/article/pii/S1074761323004533)
+- [Rose et al. 2023](https://www.nature.com/articles/s42003-023-04747-9)
+```{r dotplot-marker-genes, fig.height=5, message=F, warning=F}
+genes_dotplot <- c(
+  "ZBTB16",
+  # ------
+  # Tnaive
+  "CCR7",
+  "SELL",
+  "TCF7",
+  "LEF1",
+  "CD27",
+  # ------
+  # CD4+ subset
+  "CD4",
+  "IL2RA",
+  "AHR",
+  "IL4R",
+  "CCR4",
+  "IL7R",
+  # ------
+  # AP1 signaling
+  "JUNB",
+  "JUN",
+  "FOS",
+  "CD69",
+  # ------
+  # CD4- subset
+  "CD8A",
+  "CD8B",
+  "TBX21",
+  "EOMES",
+  "IFNG",
+  "IL2RB",
+  "GZMK",
+  "RORC",
+  "RORA",
+  "CCR6",
+  "IL23R",
+  "KLRB1",
+  "KLRG1",
+  # "IL2RA",
+  # ------
+  # Temra
+  "PRF1",
+  "GNLY",
+  "CX3CR1",
+  "GZMB",
+  "TYROBP",
+  "NCAM1" # CD56
+  )
+
+# get list of cell id to plot (remove clusters with less than 100 cells)
+plot_DotPlot(
+  seurobj=seur_pbmc_nkt,
+  group="clusters_per_lineage",
+  features=genes_dotplot,
+  scaling=T
+  )
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig4_nkt_markergenes.pdf", width=5, height=7)
+```
+
+
+## Nebulosa plot genes of interest
+```{r, fig.height=8, fig.width=6}
+lineage_nebulosagenes(
+  seur_pbmc_nkt,
+  genes_vector=c("CCR7", "SELL", "ZBTB16", "KLRB1", "GZMK", "GZMB"),
+  # file_name="ch3_fig4_nkt_nebulosaplots.pdf",
+  pgrid_ncol=2,
+  pgrid_size=c(10, 15)
+)
+```
+
+
+
+
 # METANEIGHBOR
 
 ## Metaneighbor thymocytes x pbmcs
@@ -134,13 +262,13 @@ seur_nkt@meta.data$clusters_per_lineage_annotated <- case_when(
   seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c1" ~ "iNKT CCR9+ (c1)",
   seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c2" ~ "iNKT CCR7+ (c2)",
   seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c3" ~ "iNKT CCR9+ (c3)",
-  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c4" ~ "iNKT CD4+ eff (c4)",
-  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c5" ~ "iNKT CD4+ eff (c5)",
-  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c6" ~ "iNKT CD4- eff (c6)",
-  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c0" ~ "iNKT naive (c0)",
-  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c1" ~ "iNKT Tcm (c1)",
-  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c2" ~ "iNKT Tem (c2)",
-  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c3" ~ "iNKT Temra (c3)"
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c4" ~ "iNKT CD4+ mem (c4)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c5" ~ "iNKT CD4+ mem (c5)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_thymus_c6" ~ "iNKT CD4- mem (c6)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c0" ~ "iNKT CD4+ naive (c0)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c1" ~ "iNKT CD4+ (c1)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c2" ~ "iNKT CD4- (c2)",
+  seur_nkt@meta.data$clusters_per_lineage=="iNKT_pbmc_c3" ~ "iNKT CD4- Temra (c3)"
 )
 # table(seur_nkt@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
 
@@ -270,34 +398,34 @@ mtn.df <- melt(mtn2) %>%
          Var2=factor(Var2, levels=nkt_mtn_order))
   
 # barplots
-bp.x <- ggplot(data=mtn.df%>% select(Var1,Var1_ncells) %>% distinct(),
-               aes(x=Var1, y=Var1_ncells))+
-  geom_bar(stat="identity", fill="#bdbdbd") + theme_cowplot()+
-  scale_x_discrete(position="top")+
-  labs(y="# cells")+
-  theme(axis.text = element_text(size=8),
-        # axis.text.x = element_text(size = 8, angle=45, hjust=0),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(),
-        axis.title.x = element_blank(),
-        axis.line.x=element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.title.y=element_text(size=8),
-        legend.position = "none")
-
-bp.y <- ggplot(data=mtn.df%>% select(Var2,Var2_ncells) %>% distinct(),
-               aes(x=Var2, y=Var2_ncells))+
-  geom_bar(stat="identity", fill="#bdbdbd") +
-  scale_x_discrete(position="top") +
-  labs(y="# cells")+ coord_flip() + theme_cowplot()+
-  theme(axis.title.y = element_blank(),
-        axis.text = element_text(size=8),
-        axis.text.y=element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_text(size=8),
-        axis.line.y=element_blank(),
-        legend.position = "none")
+# bp.x <- ggplot(data=mtn.df%>% select(Var1,Var1_ncells) %>% distinct(),
+#                aes(x=Var1, y=Var1_ncells))+
+#   geom_bar(stat="identity", fill="#bdbdbd") + theme_cowplot()+
+#   scale_x_discrete(position="top")+
+#   labs(y="# cells")+
+#   theme(axis.text = element_text(size=8),
+#         # axis.text.x = element_text(size = 8, angle=45, hjust=0),
+#         axis.text.x=element_blank(),
+#         axis.ticks.x=element_blank(),
+#         axis.title.x = element_blank(),
+#         axis.line.x=element_blank(),
+#         axis.ticks.y = element_blank(),
+#         axis.title.y=element_text(size=8),
+#         legend.position = "none")
+# 
+# bp.y <- ggplot(data=mtn.df%>% select(Var2,Var2_ncells) %>% distinct(),
+#                aes(x=Var2, y=Var2_ncells))+
+#   geom_bar(stat="identity", fill="#bdbdbd") +
+#   scale_x_discrete(position="top") +
+#   labs(y="# cells")+ coord_flip() + theme_cowplot()+
+#   theme(axis.title.y = element_blank(),
+#         axis.text = element_text(size=8),
+#         axis.text.y=element_blank(),
+#         axis.ticks.y = element_blank(),
+#         axis.ticks.x = element_blank(),
+#         axis.title.x = element_text(size=8),
+#         axis.line.y=element_blank(),
+#         legend.position = "none")
 
 
 # BUBBLE PLOT
