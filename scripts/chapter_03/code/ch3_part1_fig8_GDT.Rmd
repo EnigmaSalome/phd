@@ -285,16 +285,6 @@ highlight_TCRusage <- function(seurobj=seur_pbmc_gdt, cells, ptitle, cellscolor)
 }
 
 # highlight TRDV1, TRDV2, TRDV3 and TRGV9
-# plot_grid(
-#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV1","cellid"]), plot.title = "TRDV1",
-#                      legend.position = "none", na.value = "grey90", colors.use = "#a40000"),
-#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV2","cellid"]), plot.title = "TRDV2",
-#                      legend.position = "none", na.value = "grey90", colors.use = "blue"),
-#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV3","cellid"]), plot.title = "TRDV3",
-#                      legend.position = "none", na.value = "grey90", colors.use = "#318f49"),
-#   SCpubr::do_DimPlot(sample = seur_pbmc_gdt, cells.highlight = pull(gd.tcr[gd.tcr$TRDV=="TRDV2"&gd.tcr$TRGV=="TRGV9","cellid"]), plot.title = "VD2-VG9",
-#                      legend.position = "none", na.value = "grey90", colors.use = "cyan"),
-#   nrow=2)
 plot_grid(
   highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV1","cellid"]), ptitle = "TRDV1", cellscolor = "#a40000"),
   highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV2","cellid"]), ptitle = "TRDV2", cellscolor = "blue"),
@@ -303,6 +293,15 @@ plot_grid(
   highlight_TCRusage(cells = pull(gd.tcr[gd.tcr$TRGV=="TRGV9","cellid"]), ptitle = "VG9", cellscolor = "gold"),
   nrow=2)
 # ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig8_gdt_tcr_trdv.pdf", width=9, height=6)
+
+# highlight on integrated umap
+# plot_grid(
+#   highlight_TCRusage(seurobj=seur_integrated, cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV1","cellid"]), ptitle = "TRDV1", cellscolor = "#a40000"),
+#   # highlight_TCRusage(seurobj=seur_integrated, cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV2","cellid"]), ptitle = "TRDV2", cellscolor = "blue"),
+#   highlight_TCRusage(seurobj=seur_integrated, cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV2"&gd.tcr$TRGV=="TRGV9","cellid"]), ptitle = "VD2+VG9+", cellscolor = "lightblue"),
+#   # highlight_TCRusage(seurobj=seur_integrated, cells = pull(gd.tcr[gd.tcr$TRDV=="TRDV3","cellid"]), ptitle = "TRDV3", cellscolor = "#318f49"),
+#   highlight_TCRusage(seurobj=seur_integrated, cells = pull(gd.tcr[gd.tcr$TRGV=="TRGV9","cellid"]), ptitle = "VG9", cellscolor = "gold"),
+#   nrow=2)
 ```
 
 
