@@ -1,0 +1,464 @@
+---
+title: "Chapter 3 - gdT figure"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+library(SummarizedExperiment)
+library(reshape2)
+library(MetaNeighbor)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+seur_pbmc_gdt <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_gdt_clean.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+lineage_dimplot <- function(seurobj, col_vector, file_name="no"){
+  p <- do_DimPlot(
+    seurobj,
+    group.by="clusters_per_lineage",
+    colors.use = col_vector,
+    legend.position = "right",
+    # raster = T,
+    # raster.dpi=2048,
+    pt.size = 0.5#,
+    # border.size=1.5
+  )+
+    theme(
+      # axis.title=element_text(size=8),
+      # axis.text=element_text(size=6),
+      legend.key.size = unit(0.4, "cm"),
+      legend.title=element_text(size=8),
+      legend.text = element_text(size=6)
+    )
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=4, height=2.5, units="in")
+  }
+}
+
+
+lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwidth=6){
+  p <- seurobj@meta.data %>%
+    group_by(Donor, clusters_per_lineage) %>%
+    dplyr::count() %>%
+    group_by(Donor) %>%
+    mutate(sum_per_donor=sum(n),
+           freq=n*100/sum_per_donor) %>%
+  ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
+    geom_bar(stat="identity")+
+    scale_fill_manual(values=col_vector)+
+    labs(x="Donor", y="% cells", fill="")+
+    theme_cowplot()#+
+  # theme(axis.text=element_text(size=5/.pt),
+  #       axis.title=element_text(size=7/.pt),
+  #       legend.text = element_text(size=5/.pt))
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=figwidth, height=5, units="in")
+  }
+}
+
+
+plot_DotPlot <- function(seurobj, group, features, scaling=T){
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=features,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=id, y=features.plot, fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,6), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(
+      axis.text.y=element_text(face="italic"),
+      axis.text.x=element_text(angle=45, hjust=1)
+    )+
+    labs(y="", x="")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")
+  } else{
+    p <- p + viridis::scale_fill_viridis(option="B", direction=-1, name="normalized\navg expression")
+  }
+  return(p)
+}
+
+
+lineage_nebulosagenes <- function(seuratobj, genes_vector, pgrid_ncol=2, pgrid_size=c(10,30), file_name="no"){
+  
+  pnebulosa <- list()
+  for(gene in genes_vector) {
+    p <- SCpubr::do_NebulosaPlot(seuratobj, features = gene, sequential.palette="YlOrRd")
+    p <- ggrastr::rasterise(p, layers="Point", dpi=200)
+    pnebulosa[[gene]] <- p
+  }
+  pgrid <- plot_grid(plotlist=pnebulosa, ncol=pgrid_ncol)
+  print(pgrid)
+  
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=pgrid,
+           width=pgrid_size[1], height=pgrid_size[2])
+  }
+}
+```
+
+
+
+
+# UMAP and distribution per donor
+
+## Umap
+```{r umap-gdt}
+lineage_dimplot(seurobj = seur_pbmc_gdt, col_vector=cols_pbmc_gdt, file_name="ch3_fig8_gdt_umap.pdf")
+```
+
+
+## Distribution per donor
+```{r barplot_per_donor}
+# cluster comp per donor
+lineage_clustersperdonor(seurobj = seur_pbmc_gdt, col_vector = cols_pbmc_gdt, file_name = "ch3_fig8_gdt_clustersperdonor.pdf", figwidth = 7)
+```
+
+
+
+
+# GENES OF INTEREST
+## Dotplot genes on interest
+The marker genes were chosen based on:
+- [Sallusto et al. 1999](https://www.nature.com/articles/44385)
+- [Terekhova et al. 2023](https://www.sciencedirect.com/science/article/pii/S1074761323004533)
+- [Rose et al. 2023](https://www.nature.com/articles/s42003-023-04747-9)
+```{r dotplot-marker-genes, fig.height=5, message=F, warning=F}
+genes_dotplot <- c(
+  "ZBTB16",
+  # ------
+  # Tnaive
+  "CCR7",
+  "SELL",
+  "TCF7",
+  "LEF1",
+  # ------
+  # GDT stages
+  "CD27",
+  "KLRB1",
+  "IL18R1",
+  # ------
+  # Coreceptors
+  "CD4",
+  "CD8A",
+  "CD8B",
+  # ------
+  # Stage 3 GDTs
+  # "CEBPD",
+  # ------
+  # GDT1
+  "TBX21",
+  "EOMES",
+  "IFNG",
+  "TNF",
+  "CCR5",
+  "IL2RB",
+  "SLAMF7",
+  # ------
+  # GDT17
+  "RORC",
+  "RORA",
+  "CCR6",
+  "IL7R",
+  "IL23R",
+  "KLRG1",
+  # ------
+  # Cytotoxicity
+  "PRF1",
+  "GNLY",
+  "GZMA",
+  "GZMK",
+  "GZMB",
+  "CX3CR1",
+  "NCAM1" # CD56
+  )
+
+# get list of cell id to plot (remove clusters with less than 100 cells)
+plot_DotPlot(
+  seurobj=seur_pbmc_gdt,
+  group="clusters_per_lineage",
+  features=genes_dotplot,
+  scaling=F
+  )
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig6_gdt_markergenes.pdf", width=5, height=6)
+```
+
+
+## Nebulosa plot genes of interest
+```{r, fig.height=8, fig.width=6}
+lineage_nebulosagenes(
+  seur_pbmc_gdt,
+  genes_vector=c("ZBTB16", "CD27", "KLRB1", "IL18R1", "GZMK", "GZMB"),
+  # file_name="ch3_fig6_gdt_nebulosaplots.pdf",
+  pgrid_ncol=2,
+  pgrid_size=c(10, 15)
+)
+```
+
+
+
+
+# METANEIGHBOR
+
+## Metaneighbor thymocytes x pbmcs
+
+Prepare data.
+```{r prepare-gdt-mtn}
+# Get only GDTs
+seur_gdt <- subset(seur_integrated, subset=tcell_lineage=="GD")
+table(seur_gdt@meta.data[,c("clusters_per_lineage", "donor_id")], useNA="ifany") # sanity check
+
+# rename clusters_per_lineage for easier interpretation of metaneighbor
+seur_gdt@meta.data$clusters_per_lineage_annotated <- case_when(
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c0" ~ "GDT DP (c0)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c1" ~ "GDT TCRrearrange (c1)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c2" ~ "GDT TCRrearrange (c2)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c3" ~ "GDT TCRsignaling (c3)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c4" ~ "GDT ISPp (c4)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c5" ~ "GDT immature (c5)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c6" ~ "GDT immature (c6)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_thymus_c7" ~ "GDT memory (c7)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c0" ~ "GDT naive (c0)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c1" ~ "GDT (c1)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c2" ~ "GDT (c2)",
+  seur_gdt@meta.data$clusters_per_lineage=="GDT_pbmc_c3" ~ "GDT GZMB+ (c3)"
+)
+# table(seur_gdt@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
+
+# get count matrix
+se_gdt <- SummarizedExperiment(
+  assays=seur_gdt@assays[["RNA"]]@counts,
+  colData=seur_gdt@meta.data[,c("clusters_per_lineage_annotated", "donor_id", "tissue")]
+  )
+
+# get GDT-specific HVGs
+# seur_thym_gdt <- readRDS("./data/seurat_objects/thymus_objects/seurat_filtered_harmony_02_15_23_thymus.gdt.RDS")
+# seur_pbmc_gdt <- readRDS("./data/seurat_objects/pbmc_objects/blood.GDT_03_16_23.RDS")
+# hvg_gdt_joint <- union(VariableFeatures(seur_thym_gdt), VariableFeatures(seur_pbmc_gdt))
+hvg_gdt <- VariableFeatures(FindVariableFeatures(seur_gdt))
+length(intersect(VariableFeatures(seur_integrated), hvg_gdt)) # 1028 genes
+# length(intersect(hvg_gdt, hvg_gdt_joint))
+```
+
+Run metaneighbor with donors as "study" (to check for reproducibility across donors).
+```{r run_mtn_branches, fig.width=14, fig.height=14}
+mtn <- MetaNeighborUS(
+  # var_genes=VariableFeatures(seur_integrated),
+  var_genes=hvg_gdt,
+  dat=se_gdt,
+  study_id=se_gdt$donor_id,
+  cell_type=se_gdt$clusters_per_lineage_annotated,
+  fast_version=T
+  )
+
+# quick heatmap
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          keysize = 1.2,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9))
+```
+To note: the PBMC GDT (c0-2) don't always have the best AUROC with each other (is it because it's overclustered?).
+
+Now re-run it with "tissue" as study_id (will be easier to read).
+```{r, fig.width=8, fig.height=8}
+# test by removing PBMC cluster c0
+# se_gdt_test <- se_gdt[,rownames(colData(se_gdt)[colData(se_gdt)$clusters_per_lineage_annotated != "GDT (c1)",])]
+
+mtn2 <- MetaNeighborUS(
+  # var_genes=VariableFeatures(seur_integrated),
+  var_genes=hvg_gdt,
+  dat=se_gdt,
+  study_id=se_gdt$tissue,
+  cell_type=se_gdt$clusters_per_lineage_annotated,
+  fast_version=T
+  )
+
+# quick heatmap
+heatmap.2(mtn2,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          # keysize = 0.5,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(10,10)
+          )
+```
+
+
+
+
+```{r plot-gdt-mtn, fig.width=10, fig.height=10}
+# library(ggrepel)
+gdt_mtn_order <- c(
+  "Thymus|GDT DP (c0)",
+  "Thymus|GDT CD8aa (c1)",
+  "Thymus|GDT CCR9+ (c2)",
+  "Thymus|GDT CCR7+ (c3)",
+  "Thymus|GDT CCR7+ (c4)",
+  "Thymus|GDT CCR7+ (c5)",
+  "Thymus|GDT memory (c6)",
+  "PBMC|GDT (c0)",
+  "PBMC|GDT (c1)",
+  "PBMC|GDT (c2)",
+  "PBMC|GDT GZMB+ (c3)"
+)
+
+# get nb of cells
+ncells.df <- colData(se_gdt) %>%
+  as_data_frame() %>%
+  group_by(tissue, clusters_per_lineage_annotated) %>%
+  dplyr::count() %>%
+  mutate(var=paste(tissue, clusters_per_lineage_annotated, sep="|")) %>%
+  ungroup() %>%
+  dplyr::select(n, var)
+
+# final df for plotting
+mtn.df <- melt(mtn2) %>%
+  dplyr::rename(auroc=value) %>%
+  left_join(ncells.df, by=c("Var1"="var")) %>%
+  dplyr::rename(Var1_ncells=n) %>%
+  left_join(ncells.df, by=c("Var2"="var")) %>%
+  dplyr::rename(Var2_ncells=n) %>%
+  mutate(Var1=factor(Var1, levels=gdt_mtn_order),
+         Var2=factor(Var2, levels=gdt_mtn_order))
+  
+# barplots
+bp.x <- ggplot(data=mtn.df%>% select(Var1,Var1_ncells) %>% distinct(),
+               aes(x=Var1, y=Var1_ncells))+
+  geom_bar(stat="identity", fill="#bdbdbd") + theme_cowplot()+
+  scale_x_discrete(position="top")+
+  labs(y="# cells")+
+  theme(axis.text = element_text(size=8),
+        # axis.text.x = element_text(size = 8, angle=45, hjust=0),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x=element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y=element_text(size=8),
+        legend.position = "none")
+
+bp.y <- ggplot(data=mtn.df%>% select(Var2,Var2_ncells) %>% distinct(),
+               aes(x=Var2, y=Var2_ncells))+
+  geom_bar(stat="identity", fill="#bdbdbd") +
+  scale_x_discrete(position="top") +
+  labs(y="# cells")+ coord_flip() + theme_cowplot()+
+  theme(axis.title.y = element_blank(),
+        axis.text = element_text(size=8),
+        axis.text.y=element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_text(size=8),
+        axis.line.y=element_blank(),
+        legend.position = "none")
+
+
+# BUBBLE PLOT
+hm.clean <- ggplot(mtn.df, aes(x=Var1, y=Var2)) +
+  geom_point(aes(size = abs(auroc-0.5), color= auroc))+
+  geom_text(data=mtn.df %>% filter(auroc>0.8 | auroc < 0.1) %>% mutate(across("auroc", \(x) round(x,2))), aes(label=auroc), color="white", size=3)+
+  scale_size_continuous(limits=c(0,1), breaks=seq(0,1, by=0.2), range = c(0, 20), guide="none")+
+  scale_color_gradient2(low="#2166ac", mid="white", high="#a50f15", midpoint=0.5, limits=c(0,1), name="AUROC", breaks=seq(0,1, by=0.2))+
+  labs(x="",y="", size="AUROC")+
+  theme_cowplot()+
+  theme(legend.position="bottom",
+        legend.key.width = unit(0.8, 'cm'),
+        axis.text = element_text(size=8),
+        axis.title=element_text(size=8),
+        axis.text.x=element_text(angle=45, hjust=1)
+  )
+(bp.x+plot_spacer() + plot_layout(widths = c(5, 1))) / (hm.clean + bp.y + plot_layout(widths = c(5, 1))) + plot_layout(heights = c(1, 5))
+# ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig6_gdt_mtn_thymuspbmc.pdf",
+#        width=8, height=8)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
