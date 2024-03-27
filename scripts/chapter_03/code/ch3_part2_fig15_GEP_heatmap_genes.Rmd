@@ -1,0 +1,142 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+# seurat object
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+# gene scores from cNMF
+cnmf_spectra <- read.csv("./data/cnmf/non_imputed_cNMF_allcells.spectra.k_12.dt_0_02.consensus.txt", sep="\t", row.names=1)
+cnmf_spectra <- read.csv("./data/cnmf/non_imputed_cNMF_allcells.gene_spectra_score.k_12.dt_0_02.txt", sep="\t", row.names=1)
+# table(colnames(cnmf_spectra) %in% VariableFeatures(seur_integrated))
+dim(cnmf_spectra)
+rownames(cnmf_spectra) <- paste0("GEP", c(2,5,3,1,4,12,6,7,8,10,9,11))
+head(cnmf_spectra)
+# table(colnames(cnmf_spectra)%in%rownames(seur_integrated))
+rowSums(cnmf_spectra)
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+
+```
+
+
+
+
+# ANALYSIS
+
+## Check out genes with top scores in each gep
+```{r analysis-1, fig.height=10, fig.width=14}
+cnmf_spectra %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column("gene") %>%
+  pivot_longer(cols=!gene, names_to="gep", values_to = "value") %>%
+  filter(!gene %in% grep("RPS|RPL", gene, value=T)) %>%
+  group_by(gep) %>%
+  top_n(20, value) %>%
+  ungroup() %>%
+  arrange(gep) %>%
+  ggplot() +
+  facet_wrap(~gep, scales="free")+
+  geom_point(aes(x=gene, y=value))+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+
+
+## Analysis 2
+```{r analysis-2, fig.height=10, fig.width=14}
+cnmf_spectra %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column("gene") %>%
+  pivot_longer(cols=!gene, names_to="gep", values_to = "value") %>%
+  filter(gene %in% genes_dotplot) %>%
+  filter(gep %in% paste0("GEP", 3:6)) %>%
+  arrange(gep) %>%
+  ggplot() +
+  facet_wrap(~gene, scales="free_y")+
+  geom_point(aes(x=factor(gep, levels=paste0("GEP", 1:12)), y=value))+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+
+## Analysis 1
+```{r analysis-1, fig.height=10, fig.width=14}
+cnmf_spectra %>%
+  t() %>%
+  as.data.frame() %>%
+  rownames_to_column("gene") %>%
+  pivot_longer(cols=!gene, names_to="gep", values_to = "value") %>%
+  filter(gene %in% genes_dotplot) %>%
+  filter(gep %in% paste0("GEP", 3:6)) %>%
+  arrange(gep) %>%
+  ggplot() +
+  facet_wrap(~gene, scales="free_y")+
+  geom_point(aes(x=factor(gep, levels=paste0("GEP", 1:12)), y=value))+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
