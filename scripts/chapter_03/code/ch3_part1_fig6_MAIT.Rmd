@@ -83,6 +83,7 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
     group_by(Donor) %>%
     mutate(sum_per_donor=sum(n),
            freq=n*100/sum_per_donor) %>%
+    mutate(Donor=factor(Donor, levels=c(8, 9, 10, 12, 13, 5, 11, 6, 7))) %>%
   ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
     geom_bar(stat="identity")+
     scale_fill_manual(values=col_vector)+
@@ -267,9 +268,9 @@ seur_mait@meta.data$clusters_per_lineage_annotated <- case_when(
   seur_mait@meta.data$clusters_per_lineage=="MAIT_thymus_c4" ~ "MAIT CCR7+ (c4)",
   seur_mait@meta.data$clusters_per_lineage=="MAIT_thymus_c5" ~ "MAIT CCR7+ (c5)",
   seur_mait@meta.data$clusters_per_lineage=="MAIT_thymus_c6" ~ "MAIT memory (c6)",
-  seur_mait@meta.data$clusters_per_lineage=="MAIT_pbmc_c0" ~ "MAIT (c0)",
-  seur_mait@meta.data$clusters_per_lineage=="MAIT_pbmc_c1" ~ "MAIT (c1)",
-  seur_mait@meta.data$clusters_per_lineage=="MAIT_pbmc_c2" ~ "MAIT (c2)",
+  seur_mait@meta.data$clusters_per_lineage=="MAIT_pbmc_c0" ~ "MAIT (c0-c2)", #"MAIT (c0)",
+  seur_mait@meta.data$clusters_per_lineage=="MAIT_pbmc_c1" ~ "MAIT (c0-c2)", # "MAIT (c1)",
+  seur_mait@meta.data$clusters_per_lineage=="MAIT_pbmc_c2" ~ "MAIT (c0-c2)", #"MAIT (c2)",
   seur_mait@meta.data$clusters_per_lineage=="MAIT_pbmc_c3" ~ "MAIT GZMB+ (c3)"
 )
 # table(seur_mait@meta.data[,c("clusters_per_lineage_annotated", "clusters_per_lineage")], useNA="ifany")
@@ -489,7 +490,8 @@ for(i in 1:100){
     }
     
     # if it's a pbmc cluster
-    else if(cluster %in% c("MAIT (c0)", "MAIT (c1)", "MAIT (c2)", "MAIT GZMB+ (c3)")){
+    # else if(cluster %in% c("MAIT (c0)", "MAIT (c1)", "MAIT (c2)", "MAIT GZMB+ (c3)")){
+    else if(cluster %in% c("MAIT (c0-c2)", "MAIT GZMB+ (c3)")){
       nbcells_to_sample <- 50 # 241
       allcells <- rownames(colData(se_mait)[colData(se_mait)$clusters_per_lineage_annotated==cluster,])
       # cat("Total nb of cells:", length(allcells), "\n")

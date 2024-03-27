@@ -82,6 +82,7 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
     group_by(Donor) %>%
     mutate(sum_per_donor=sum(n),
            freq=n*100/sum_per_donor) %>%
+    mutate(Donor=factor(Donor, levels=c(8, 9, 10, 12, 13, 5, 11, 6, 7))) %>%
   ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
     geom_bar(stat="identity")+
     scale_fill_manual(values=col_vector)+
@@ -191,10 +192,10 @@ genes_dotplot <- c(
   "IL7R",
   # ------
   # AP1 signaling
-  "JUNB",
-  "JUN",
-  "FOS",
-  "CD69",
+  # "JUNB",
+  # "JUN",
+  # "FOS",
+  # "CD69",
   # ------
   # CD4- subset
   "CD8A",
@@ -203,11 +204,12 @@ genes_dotplot <- c(
   "EOMES",
   "IFNG",
   "IL2RB",
+  "IL15RA",
   "GZMK",
   "RORC",
   "RORA",
   "CCR6",
-  "IL23R",
+  # "IL23R",
   "KLRB1",
   "KLRG1",
   # "IL2RA",
@@ -217,8 +219,15 @@ genes_dotplot <- c(
   "GNLY",
   "CX3CR1",
   "GZMB",
-  "TYROBP",
-  "NCAM1" # CD56
+  # "TYROBP",
+  "NCAM1", # CD56
+  # -------
+  # IL17 producing capacity
+  "TGFBR1",
+  "TGFBR2",
+  "IL1R1",
+  "IL1RAP",
+  "IL23R"
   )
 
 # get list of cell id to plot (remove clusters with less than 100 cells)
@@ -226,7 +235,7 @@ plot_DotPlot(
   seurobj=seur_pbmc_nkt,
   group="clusters_per_lineage",
   features=genes_dotplot,
-  scaling=T
+  scaling=F
   )
 # ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig4_nkt_markergenes.pdf", width=5, height=7)
 ```

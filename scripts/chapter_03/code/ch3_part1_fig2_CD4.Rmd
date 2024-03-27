@@ -81,6 +81,7 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
     group_by(Donor) %>%
     mutate(sum_per_donor=sum(n),
            freq=n*100/sum_per_donor) %>%
+    mutate(Donor=factor(Donor, levels=c(8, 9, 10, 12, 13, 5, 11, 6, 7))) %>%
   ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
     geom_bar(stat="identity")+
     scale_fill_manual(values=col_vector)+
@@ -124,8 +125,8 @@ plot_DotPlot <- function(seurobj, group, features, scaling=T){
   return(p)
 }
 
+
 lineage_nebulosagenes <- function(seuratobj, genes_vector, pgrid_ncol=2, pgrid_size=c(10,30), file_name="no"){
-  
   pnebulosa <- list()
   for(gene in genes_vector) {
     p <- SCpubr::do_NebulosaPlot(seuratobj, features = gene, sequential.palette="YlOrRd")
@@ -239,7 +240,7 @@ plot_DotPlot(
   seurobj=seur_pbmc_cd4,
   group="clusters_per_lineage",
   features=genes_dotplot,
-  scaling=T
+  scaling=F
   )
 # ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig2_cd4_markergenes.pdf", width=5, height=5)
 ```
@@ -280,8 +281,8 @@ seur_cd4@meta.data$clusters_per_lineage_annotated <- case_when(
   seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c4" ~ "CD4 CCR7+ (c4)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c5" ~ "CD4 agonist (c5)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_thymus_c6" ~ "Thymus Treg (c6)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c0" ~ "PBMC naive (c0)",
-  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c1" ~ "PBMC naive (c1)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c0" ~ "PBMC naive (c0)", # "PBMC naive (c0-c1)",
+  seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c1" ~ "PBMC naive (c1)", # "PBMC naive (c0-c1)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c2" ~ "PBMC Tcm (c2)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c3" ~ "PBMC Treg (c3)",
   seur_cd4@meta.data$clusters_per_lineage=="CD4_pbmc_c4" ~ "PBMC Tem (c4)",
@@ -383,13 +384,14 @@ heatmap.2(mtn2,
 library(reshape2)
 # library(ggrepel)
 cd4_mtn_order <- c(
-  "Thymus|CD4 ISP (c0)",
+  "Thymus|CD4 ISPq (c0)",
   "Thymus|CD4 ISPp (c1)",
   "Thymus|DP (c2)",
   "Thymus|CD4 CCR9+ (c3)",
   "Thymus|CD4 CCR7+ (c4)",
   "PBMC|PBMC naive (c0)",
   "PBMC|PBMC naive (c1)",
+  # "PBMC|PBMC naive (c0-c1)",
   "Thymus|CD4 agonist (c5)",
   "Thymus|Thymus Treg (c6)",
   "PBMC|PBMC Treg (c3)",
@@ -421,34 +423,11 @@ ggplot(mtn.df, aes(x=Var1, y=Var2)) +
   )
 # ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig2_cd4_mtn_thymuspbmc.pdf",
 #        width=7, height=7)
-
 ```
 
 
 ## Analysis 2
 ```{r analysis-2, fig.width=10, fig.height=10}
-```
-
-## Analysis 1
-```{r analysis-1}
-
-```
-
-
-## Analysis 2
-```{r analysis-2}
-
-```
-
-## Analysis 3
-```{r analysis-3}
-
-```
-
-
-## Analysis 4
-```{r analysis-4}
-
 ```
 
 

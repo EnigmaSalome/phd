@@ -83,6 +83,7 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
     group_by(Donor) %>%
     mutate(sum_per_donor=sum(n),
            freq=n*100/sum_per_donor) %>%
+    mutate(Donor=factor(Donor, levels=c(8, 9, 10, 12, 13, 5, 11, 6, 7))) %>%
   ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
     geom_bar(stat="identity")+
     scale_fill_manual(values=col_vector)+
@@ -145,6 +146,34 @@ lineage_nebulosagenes <- function(seuratobj, genes_vector, pgrid_ncol=2, pgrid_s
            width=pgrid_size[1], height=pgrid_size[2])
   }
 }
+
+lineage_genesignature <- function(seuratobj, genesignature, file_name="no", ordercells=T){
+  minimum_genesignature <- min(seuratobj@meta.data[,genesignature])
+  minimum_to_plot <- ifelse(minimum_genesignature<0, 0, minimum_genesignature)
+  p <- ggrastr::rasterise(
+    do_FeaturePlot(
+    seuratobj,
+    features = genesignature,
+    min.cutoff=minimum_to_plot,
+    use_viridis = T,
+    viridis.palette = "E",
+    legend.position="right",
+    order=ordercells,
+    pt.size = 3,
+    raster=F
+    # raster.dpi=2048,
+    # pt.size=10
+  ),
+  layers="Point",
+  dpi=300
+  )
+  print(p)
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/", file_name),
+           plot=p,
+           width=9, height=6)
+  }
+}
 ```
 
 
@@ -183,12 +212,14 @@ genes_dotplot <- c(
   "SELL",
   "TCF7",
   "LEF1",
-  "IL7R",
-  # "CD27",
+  # "IL7R",
+  "CD27",
   # ------
   # VD2VG9 GDT stages
   "CD4",
   "KLRB1",
+  "DPP4",
+  "KLRD1",
   # "IL18R1",
   # ------
   # Coreceptors
@@ -713,6 +744,56 @@ hm.clean_sampling <- ggplot(mtn.df_sampling, aes(x=Var1, y=Var2)) +
 #   width = 9,
 #   height = 9
 # )
+```
+
+
+
+
+# SCORE TEREKHOVA NAIVE GD ON THYMIC OBJECT
+
+```{r}
+seur_thymus_gdt <- readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_gdt_with_gene_signatures.rds")
+
+# Import terekhova GD gene signatures
+genes.terekhova_gdt <- readxl::read_excel("./data/litterature_gene_signatures/terekhova_supptable.xlsx", sheet=7)
+genes.terekhova_gdt <- genes.terekhova_gdt %>%
+  pivot_longer(cols=everything(), names_to="signature", values_to = "gene") %>%
+  filter(gene %in% rownames(seur_thymus_gdt) & !is.na(gene)) # lost about 10% of genes
+
+terekhova_signatures_list <- list()
+for(gp in unique(genes.terekhova_gdt$signature)){
+  print(gp)
+  genes_in_program <- genes.terekhova_gdt %>%
+    filter(signature==gp) %>%
+    pull(gene)
+  print(length(unique(genes_in_program)))
+  terekhova_signatures_list[[gp]] <- unique(genes_in_program)
+}
+print(lengths(terekhova_signatures_list))
+
+# Score on thymic GD object
+seur_thymus_gdt <-
+  AddModuleScore(
+    seur_thymus_gdt,
+    name = names(terekhova_signatures_list),
+    features = terekhova_signatures_list,
+    seed = 1
+  )
+colnames(seur_thymus_gdt@meta.data)[49:53] <- names(terekhova_signatures_list)
+
+# Plot
+lineage_genesignature(
+  seur_thymus_gdt,
+  "GD_naive",
+  # file_name = "ch3_fig8_terekhova_sig_GDnaive.pdf",
+  ordercells = T
+)
+lineage_genesignature(
+  seur_thymus_gdt,
+  "GD_Vd2_GZMK+",
+  # file_name = "ch3_fig8_terekhova_sig_Vd2GZMK.pdf",
+  ordercells = T
+)
 ```
 
 

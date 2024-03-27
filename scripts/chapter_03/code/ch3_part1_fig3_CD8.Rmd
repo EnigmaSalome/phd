@@ -81,6 +81,7 @@ lineage_clustersperdonor <- function(seurobj, col_vector, file_name="no", figwid
     group_by(Donor) %>%
     mutate(sum_per_donor=sum(n),
            freq=n*100/sum_per_donor) %>%
+    mutate(Donor=factor(Donor, levels=c(8, 9, 10, 12, 13, 5, 11, 6, 7))) %>%
   ggplot(aes(x=factor(Donor, levels=sort(unique(Donor))), y=freq, fill=clusters_per_lineage))+
     geom_bar(stat="identity")+
     scale_fill_manual(values=col_vector)+
@@ -243,7 +244,7 @@ plot_DotPlot(
   seurobj=seur_pbmc_cd8,
   group="clusters_per_lineage",
   features=genes_dotplot,
-  scaling=T
+  scaling=F
   )
 # ggsave("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section1/ch3_fig3_cd8_markergenes.pdf", width=5, height=6)
 ```
