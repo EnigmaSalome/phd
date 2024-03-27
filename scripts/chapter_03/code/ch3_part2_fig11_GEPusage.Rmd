@@ -1,0 +1,193 @@
+---
+title: "Chapter 3 - GEP usage"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+```
+
+This cleaned-up seurat object doesn't have GEP12 usage, so we need to add it.
+```{r import-data-gep12}
+gep_usage <- read.table("~/Projects/HumanThymusProject/data/human-PBMC/HumanData_20_RibbonPlotCellStateToID/cNMF_output/non_imputed_cNMF_allcells.usages.k_12.dt_0_02.consensus.txt", header=T)
+dim(gep_usage)
+colnames(gep_usage) <- paste0("GEP", c(2,5,3,1,4,12,6,7,8,10,9,11), "_usage")
+head(gep_usage)
+table(rownames(gep_usage)==rownames(seur_integrated@meta.data))
+seur_integrated@meta.data <- cbind(seur_integrated@meta.data, gep_usage[,"GEP12_usage"])
+colnames(seur_integrated@meta.data)[32] <- "GEP12_usage"
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_gepusage <- function(seurobj=seur_integrated, gep){
+  p <- do_FeaturePlot(
+    seurobj,
+    features=paste0(gep,"_usage"),
+    order=T,
+    use_viridis=T,
+    viridis.palette = "D"
+  )
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)+
+    theme(
+      panel.background = element_rect(fill='transparent'),
+      plot.background = element_rect(fill='transparent', color=NA),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      legend.background = element_rect(fill='transparent'),
+      legend.box.background = element_rect(fill='transparent')
+    )
+  return(p)
+}
+
+plot_beeswarm <- function(seurobj=seur_integrated, feature, xaxis="tissue", ytitle, cols_vector=cols_tissue, file_name="no"){
+  seurobj@meta.data$tissue <- factor(seurobj@meta.data$tissue, levels=c("Thymus", "PBMC"))
+  p <- ggplot(
+    as.data.frame(seurobj@meta.data),
+    aes_string(x=xaxis, y=feature, fill=xaxis)
+  ) +
+    # geom_violin(alpha=0.5, width=1.5,color=NA) +
+    ggbeeswarm::geom_quasirandom(shape = 21, size=2, width = .4, color="black", show.legend = F, stroke=0.1)+
+    scale_fill_manual(values=cols_vector)+
+    labs(x="", y="", title=ytitle)+
+    ylim(c(0, 1))+
+    theme_classic()+
+    theme(
+      legend.position="none",
+      axis.line = element_blank(),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
+    )
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)
+  return(p)
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section2/ch3_fig11_", file_name),
+           plot=p,
+           width=8, height=5)
+  }
+  # return(p)
+}
+```
+
+
+
+
+# PLOT GEP USAGE
+
+## Plot all GEPs usage on integrated UMAP
+```{r plot-gep-usage-umap, fig.width=14, fig.height=14}
+plist <- list()
+for(i in 1:12){
+  print(i)
+  plist[[i]] <- plot_gepusage(gep=paste0("GEP", i))
+}
+
+plot_grid(plotlist=plist, ncol=4)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig11_gepusage.pdf", width=18, height=16)
+```
+
+
+## Show batch effect of GEP12
+```{r plot-gep12-batch, fig.width=14, fig.height=14}
+# too heavy
+# do_FeaturePlot(
+#   seur_integrated,
+#   features = "GEP12_usage",
+#   split.by = "batch_id",
+#   ncol = 3,
+#   order = T,
+#   use_viridis = T,
+#   viridis.palette = "D",
+#   legend.title = "GEP12"
+# )
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig11_suppfigure_gep12.pdf", width=10, height=11)
+
+plist_batch <- list()
+for(i in sort(unique(seur_integrated$batch_id))){
+  print(i)
+  plist_batch[[i]] <- plot_gepusage(
+    seurobj=subset(seur_integrated, subset=batch_id==i),
+    gep="GEP12"
+    )
+}
+plot_grid(plotlist=plist_batch, ncol=3, labels="AUTO")
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig11_suppfigure_gep12_subset.pdf", width=16, height=20)
+```
+
+
+## Plot all GEPs usage on beeswarmplots
+```{r plot-gep-usage-beeswarm, fig.width=14, fig.height=10}
+plist_beeswarm <- list()
+for(i in 1:11){
+  print(i)
+  plist_beeswarm[[i]] <- plot_beeswarm(feature = paste0("GEP", i, "_usage"), ytitle = paste0("GEP", i))
+}
+
+plot_grid(plotlist=plist_beeswarm, ncol=4)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig12_gepusage_per_tissue.pdf", width=14, height=10)
+```
+
+
+## Plot GEP3-7, 11 per cluster in PBMC
+```{r plot-gep3-to-gep6}
+seur_pbmc <- subset(seur_integrated, subset=tissue=="PBMC")
+
+plist_beeswarm_blood <- list()
+for(i in 3:6){
+  print(i)
+  plist_beeswarm_blood[[as.character(i)]] <- plot_beeswarm(
+    seurobj=seur_pbmc,
+    feature = paste0("GEP", i, "_usage"),
+    ytitle = paste0("GEP", i),
+    xaxis = "clusters_integrated_data",
+    cols_vector = cols_integrated
+  )
+}
+
+plot_grid(plotlist=plist_beeswarm_blood, ncol=2)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig13_gepusage_per_blood_cluster.pdf", width=10, height=7)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
