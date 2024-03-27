@@ -1,0 +1,208 @@
+---
+title: "Chapter 3 - Expression of migration, cytotoxic genes, etc. by each GEP"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+seur_pbmc <- subset(seur_integrated, subset=tissue=="PBMC")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_DotPlot <-
+  function(
+    seurobj,
+    group,
+    features,
+    scaling = T,
+    col_gradient = c(scales::muted("blue"), "white", scales::muted("red"))
+  ) {
+    
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=features,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=features.plot, y=factor(id, levels=rev(paste0("GEP", 3:6))), fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,10), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(
+      # axis.text.y=element_text(),
+      axis.text.x=element_text(face="italic", angle=45, hjust=1)
+    )+
+    labs(y="", x="")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=col_gradient[1], mid=col_gradient[2], high=col_gradient[3], name="z-score\nnormalized\navg expression")
+  } else{
+    p <- p + scale_fill_gradient2(low=col_gradient[1], mid=col_gradient[2], high=col_gradient[3], name="normalized\navg expression")
+  }
+  return(p)
+}
+```
+
+
+
+
+# ANALYSIS
+
+## Define genes to plot
+These genes were chosen if they were present in the top genes of GEP3, GEP4, GEP5 and/or GEP6.
+```{r genes-define}
+genes_to_plot <- list()
+genes_to_plot[["migration"]] <-
+  c(
+    "SELL",
+    "CXCR3",
+    "CCR4",
+    "S1PR4",
+    "GPR183",
+    "CCR1",
+    "CCR2",
+    "CCR5",
+    "CCR6",
+    "CXCR6",
+    "CXCR2",
+    "CX3CR1",
+    "S1PR5"
+  )
+genes_to_plot[["cytokine_receptors"]] <- 
+  c(
+    "IL6R",
+    "IL4R",
+    "IL2RA",
+    "IL17RE",
+    "IL2RB",
+    "IL18R1",
+    "IL18RAP",
+    "IL23R",
+    "IL12RB1",
+    "IL12RB2",
+    "IFNGR1"
+    # "IL7R"
+  )
+genes_to_plot[["cytotox"]] <- 
+  c(
+    "GZMK",
+    "GNLY",
+    "GZMA",
+    "GZMB",
+    "GZMH"
+  )
+genes_to_plot[["nk"]] <- 
+  c(
+    "KLRG1",
+    "NCR3",
+    "KLRB1",
+    "NCR1",
+    "KLRC2",
+    "KLRC3",
+    "KIR3DL2",
+    "KIR2DL3",
+    "KLRD1",
+    "KLRC4",
+    "KLRF1",
+    "KLRK1",
+    "LILRB1"
+  )
+genes_to_plot[["integrins"]] <- c(
+  "ITGB1",
+  "ITGAX",
+  "ITGAM",
+  "ITGAL",
+  "ITGB2",
+  "ITGAV"
+)
+```
+
+
+## Dotplot migration genes
+```{r dotplot-migration, fig.width=6, fig.height=4, warning=F}
+plot_DotPlot(
+  seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+  group = "GEP_with_max_usage",
+  features = genes_to_plot$migration,
+  col_gradient=c("#f7fbff", "#9ecae1", "#08306b")
+)
+# plot_DotPlot(
+#   seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+#   group = "GEP_with_max_usage",
+#   features = genes_to_plot$migration,
+#   scaling=F,
+#   col_gradient=c("#f7fbff", "#9ecae1", "#08306b")
+# )
+```
+
+
+## Dotplot cytokine receptors
+```{r dotplot-cytokine-receptors, fig.width=6, fig.height=4, warning=F}
+plot_DotPlot(
+  seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+  group = "GEP_with_max_usage",
+  features = genes_to_plot$cytokine_receptors,
+  col_gradient=c("#f7fcf5", "#a1d99b", "#00441b")
+)
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
