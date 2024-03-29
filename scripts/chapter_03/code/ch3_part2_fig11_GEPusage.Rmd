@@ -75,11 +75,30 @@ plot_gepusage <- function(seurobj=seur_integrated, gep){
   return(p)
 }
 
-plot_beeswarm <- function(seurobj=seur_integrated, feature, xaxis="tissue", ytitle, cols_vector=cols_tissue, file_name="no"){
+plot_beeswarm <-
+  function(seurobj = seur_integrated,
+           feature,
+           xaxis = "tissue",
+           xaxis_angle=0,
+           fillvariable = NA,
+           ytitle,
+           cols_vector = cols_tissue,
+           file_name = "no") {
+  # define order of some variables
   seurobj@meta.data$tissue <- factor(seurobj@meta.data$tissue, levels=c("Thymus", "PBMC"))
+  seurobj@meta.data$tcell_lineage_tissue <- factor(
+    seurobj@meta.data$tcell_lineage_tissue,
+    levels=paste(
+      rep(c("CD4", "CD8", "GD", "iNKT", "MAIT"), each=2),
+      rep(c("Thymus", "PBMC"), 5),
+      sep="_"
+      )
+    )
+  
+  if(is.na(fillvariable)==T){fillvariable <- xaxis}
   p <- ggplot(
     as.data.frame(seurobj@meta.data),
-    aes_string(x=xaxis, y=feature, fill=xaxis)
+    aes_string(x=xaxis, y=feature, fill=fillvariable)
   ) +
     # geom_violin(alpha=0.5, width=1.5,color=NA) +
     ggbeeswarm::geom_quasirandom(shape = 21, size=2, width = .4, color="black", show.legend = F, stroke=0.1)+
@@ -92,6 +111,7 @@ plot_beeswarm <- function(seurobj=seur_integrated, feature, xaxis="tissue", ytit
       axis.line = element_blank(),
       panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
     )
+  if(xaxis_angle!=0){p <- p+theme(axis.text.x=element_text(angle=xaxis_angle, hjust=1))}
   p <- ggrastr::rasterise(p, layers="Point", dpi=300)
   return(p)
   if(file_name != "no"){
@@ -100,7 +120,7 @@ plot_beeswarm <- function(seurobj=seur_integrated, feature, xaxis="tissue", ytit
            width=8, height=5)
   }
   # return(p)
-}
+  }
 ```
 
 
@@ -149,8 +169,8 @@ plot_grid(plotlist=plist_batch, ncol=3, labels="AUTO")
 ```
 
 
-## Plot all GEPs usage on beeswarmplots
-```{r plot-gep-usage-beeswarm, fig.width=14, fig.height=10}
+## Plot all GEPs usage on beeswarmplots by tissue
+```{r plot-gep-usage-beeswarm-by-tissue, fig.width=14, fig.height=10}
 plist_beeswarm <- list()
 for(i in 1:11){
   print(i)
@@ -160,6 +180,27 @@ for(i in 1:11){
 plot_grid(plotlist=plist_beeswarm, ncol=4)
 # ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig12_gepusage_per_tissue.pdf", width=14, height=10)
 ```
+
+
+## Plot all GEPs usage on beeswarmplots by lineage
+```{r plot-gep-usage-beeswarm-by-lineage, fig.width=14, fig.height=10}
+plist_beeswarm_lineage <- list()
+for(i in 1:11){
+  print(i)
+  plist_beeswarm_lineage[[i]] <- plot_beeswarm(
+    feature = paste0("GEP", i, "_usage"),
+    ytitle = paste0("GEP", i),
+    xaxis = "tcell_lineage_tissue",
+    xaxis_angle = 45,
+    fillvariable = "tcell_lineage",
+    cols_vector = cols_lineages
+    )
+}
+
+plot_grid(plotlist=plist_beeswarm_lineage, ncol=3)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig12_gepusage_per_lineage.pdf", width=14, height=14)
+```
+
 
 
 ## Plot GEP3-7, 11 per cluster in PBMC
