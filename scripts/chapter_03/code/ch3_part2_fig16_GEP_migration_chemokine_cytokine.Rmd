@@ -86,7 +86,7 @@ plot_DotPlot <-
 
 
 
-# ANALYSIS
+# DOTPLOTS
 
 ## Define genes to plot
 These genes were chosen if they were present in the top genes of GEP3, GEP4, GEP5 and/or GEP6.
@@ -94,18 +94,19 @@ These genes were chosen if they were present in the top genes of GEP3, GEP4, GEP
 genes_to_plot <- list()
 genes_to_plot[["migration"]] <-
   c(
-    "SELL",
+    "SELL", # naive/tcm, migration to lymphoid organs
     "CXCR3",
-    "CCR4",
+    # "CXCR5",
+    "CCR4", # Th2
     "S1PR4",
-    "GPR183",
+    "GPR183", # survival and migration signals to thymocytes and Tfh cells (Li 2016)
     "CCR1",
     "CCR2",
-    "CCR5",
-    "CCR6",
+    "CCR5", # Th1, tissue migration, expressed highly by GZMK+ cells (Duquette paper)
+    "CCR6", # Th17
     "CXCR6",
     "CXCR2",
-    "CX3CR1",
+    "CX3CR1", # gradient of T cell differentiation
     "S1PR5"
   )
 genes_to_plot[["cytokine_receptors"]] <- 
@@ -115,6 +116,7 @@ genes_to_plot[["cytokine_receptors"]] <-
     "IL2RA",
     "IL17RE",
     "IL2RB",
+    "IL15RA",
     "IL18R1",
     "IL18RAP",
     "IL23R",
@@ -126,8 +128,9 @@ genes_to_plot[["cytokine_receptors"]] <-
 genes_to_plot[["cytotox"]] <- 
   c(
     "GZMK",
-    "GNLY",
     "GZMA",
+    "PRF1",
+    "GNLY",
     "GZMB",
     "GZMH"
   )
@@ -136,23 +139,23 @@ genes_to_plot[["nk"]] <-
     "KLRG1",
     "NCR3",
     "KLRB1",
+    "KLRD1",
+    "KLRF1",
     "NCR1",
     "KLRC2",
     "KLRC3",
     "KIR3DL2",
     "KIR2DL3",
-    "KLRD1",
     "KLRC4",
-    "KLRF1",
     "KLRK1",
     "LILRB1"
   )
 genes_to_plot[["integrins"]] <- c(
   "ITGB1",
-  "ITGAX",
-  "ITGAM",
   "ITGAL",
   "ITGB2",
+  "ITGAX",
+  "ITGAM",
   "ITGAV"
 )
 ```
@@ -164,15 +167,10 @@ plot_DotPlot(
   seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
   group = "GEP_with_max_usage",
   features = genes_to_plot$migration,
+  # scaling=F,
   col_gradient=c("#f7fbff", "#9ecae1", "#08306b")
 )
-# plot_DotPlot(
-#   seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
-#   group = "GEP_with_max_usage",
-#   features = genes_to_plot$migration,
-#   scaling=F,
-#   col_gradient=c("#f7fbff", "#9ecae1", "#08306b")
-# )
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig16_dotplot_geps_migration.pdf", width=6, height=3)
 ```
 
 
@@ -184,19 +182,60 @@ plot_DotPlot(
   features = genes_to_plot$cytokine_receptors,
   col_gradient=c("#f7fcf5", "#a1d99b", "#00441b")
 )
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig16_dotplot_geps_cytokineR.pdf", width=6, height=3)
 ```
 
-## Analysis 3
-```{r analysis-3}
-
+## Cytotoxicity
+```{r dotplot-cytotoxic-molecules, fig.width=6, fig.height=4, warning=F}
+plot_DotPlot(
+  seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+  group = "GEP_with_max_usage",
+  features = genes_to_plot$cytotox,
+  col_gradient=c("#ffffe5", "#fec44f", "#662506")
+)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig16_dotplot_geps_cytotoxic.pdf", width=5, height=3)
 ```
 
 
-## Analysis 4
-```{r analysis-4}
-
+## NK receptors
+```{r dotplot-nk-receptors, fig.width=6, fig.height=4, warning=F}
+plot_DotPlot(
+  seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+  group = "GEP_with_max_usage",
+  features = genes_to_plot$nk,
+  col_gradient=c("#fff7f3", "#fa9fb5", "#49006a")
+)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig16_dotplot_geps_NKreceptors.pdf", width=6, height=3)
 ```
 
+
+# Integrins
+```{r dotplot-integrins, fig.width=6, fig.height=4, warning=F}
+plot_DotPlot(
+  seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+  group = "GEP_with_max_usage",
+  features = genes_to_plot$integrins,
+  col_gradient=c("#fcfbfd", "#bcbddc", "#3f007d")
+)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig16_dotplot_geps_integrins.pdf", width=5, height=3)
+```
+
+
+
+
+# CORRELATIONS
+
+```{r}
+df <- as.data.frame(seur_pbmc@meta.data) %>%
+  rownames_to_column("cellid")
+counts <- as.data.frame(t(as.data.frame(seur_pbmc@assays$RNA@data[as.vector(unlist(genes_to_plot)),]))) %>%
+  rownames_to_column("cellid")
+
+df <- left_join(df, counts, by="cellid")
+
+ggplot(df, aes(x=GEP5_usage, y=GZMK))+
+  geom_point()
+```
 
 
 
