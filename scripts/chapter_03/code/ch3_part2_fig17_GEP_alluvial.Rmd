@@ -1,0 +1,234 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(ggalluvial)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+seur_pbmc <- subset(seur_integrated, subset=tissue=="PBMC")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_gepusage <- function(seurobj=seur_pbmc, GEP_assign, lineages_to_hide){
+  df <- seurobj@meta.data %>%
+    as_tibble() %>%
+    select(c("tcell_lineage", grep("GEP", colnames(seurobj@meta.data), value=T))) %>%
+    pivot_longer(cols=!c(GEP_with_max_usage,tcell_lineage), names_to = "gep", values_to="usage") %>%
+    mutate(
+      gep=gsub("_.*", "",gep),
+      gep=factor(gep, levels=paste0("GEP", 1:11))
+    ) %>%
+    filter(GEP_with_max_usage == GEP_assign) %>%
+    filter(!tcell_lineage %in% lineages_to_hide)
+  
+  p <- ggplot(df, aes(x=gep, y=usage))+
+    geom_boxplot(outlier.shape=NA)+
+    geom_jitter(width=0.1, size=0.1)+
+    facet_wrap(~tcell_lineage, nrow=1)+
+    ylim(0,1)+
+    labs(x="", y="GEP usage", title=paste0("Cells with ", GEP_assign, " max usage"))+
+    theme_bw()+
+    theme(axis.text.x=element_text(angle=45, hjust=1),
+          strip.text=element_text(size=15))
+  
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)
+  
+  return(p)
+}
+```
+
+
+
+
+# ANALYSIS
+
+## Ribbon plot lineages assigned to GEPs with highest usage
+```{r analysis-1}
+seur_pbmc@meta.data %>%
+  as_tibble() %>%
+  # get nb of cells per gep assignment
+  group_by(tcell_lineage, GEP_with_max_usage) %>%
+  summarise(ncells=n()) %>%
+  # get %cells in each gep assignment
+  ungroup() %>%
+  group_by(tcell_lineage) %>%
+  mutate(totalcells=sum(ncells),
+         freq = ncells*100/totalcells) %>%
+  ungroup() %>%
+  mutate(GEP_with_max_usage=replace(GEP_with_max_usage, !GEP_with_max_usage%in%c("GEP3", "GEP4", "GEP5", "GEP6"), "other"),
+         GEP_with_max_usage = factor(GEP_with_max_usage, levels=c("GEP3", "GEP4", "GEP5", "GEP6", "other"))) %>%
+  filter(GEP_with_max_usage != "other") %>%
+ggplot(aes(axis1=tcell_lineage, axis2=GEP_with_max_usage, y=freq)) +
+  geom_alluvium(aes(fill=tcell_lineage))+
+  geom_stratum()+
+  geom_text(stat="stratum", aes(label=after_stat(stratum)), size=8, angle=0)+
+  scale_fill_manual(values=c("#2ca25f", "#dd1c77", "#045a8d", "#8856a7", "#bdc9e1"), name="cell type")+
+  # scale_x_discrete(limits=c("Cell type", "GEP")) + theme_classic()
+  theme_void()+
+  # scale_y_reverse()+
+  # coord_flip()+
+  theme(legend.position="none")
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig17_flowchart_geps.pdf", width=5, height=5)
+```
+
+
+## Plot the 2nd highest GEP usage
+```{r, fig.height=4, fig.width=10}
+seur_pbmc@meta.data %>%
+  as_tibble() %>%
+  select(grep("GEP", colnames(seur_pbmc@meta.data), value=T)) %>%
+  pivot_longer(cols=!GEP_with_max_usage, names_to = "gep", values_to="usage") %>%
+  filter(GEP_with_max_usage %in% paste0("GEP", 3:6)) %>%
+  ggplot(aes(x=gep, y=usage))+
+  facet_wrap(~GEP_with_max_usage)+
+  geom_boxplot(outlier.shape=NA)+
+  geom_point()+
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+
+```{r plot-usage-gep3-assigned, fig.width=8, fig.height=4}
+# GEP3
+plot_gepusage(GEP_assign="GEP3", lineages_to_hide = c("MAIT"))
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig17_GEP3assigned_gep_usages.pdf", width=12, height=4)
+
+# GEP4
+plot_gepusage(GEP_assign="GEP4", lineages_to_hide = c("MAIT", "iNKT"))
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig17_GEP4assigned_gep_usages.pdf", width=9, height=4)
+
+# GEP5
+plot_gepusage(GEP_assign="GEP5", lineages_to_hide = c("CD4", "CD8"))
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig17_GEP5assigned_gep_usages.pdf", width=9, height=4)
+
+# GEP6
+plot_gepusage(GEP_assign="GEP6", lineages_to_hide = c("MAIT", "iNKT"))
+# ggsave("./data/figures/chapter_03/figs_unfinished/section2/ch3_fig17_GEP6assigned_gep_usages.pdf", width=9, height=4)
+```
+
+
+## Plot the difference between max and 2nd max usage
+```{r diff-with-second-GEP, fig.width=8, fig.height=10}
+# df <- seur_pbmc@meta.data %>%
+#   as_tibble() %>%
+#   select(c("tcell_lineage", grep("GEP", colnames(seur_pbmc@meta.data), value=T)))
+# 
+# df$GEP_with_2nd_max_usage <- gsub("_.*", "", apply(df[,2:12], 1, function(x) names(x)[order(x, decreasing=T)[2]]))
+# df$max_usage <- apply(df[,2:12], 1, function(x) x[order(x, decreasing=T)[1]])
+# df$max2nd_usage <- apply(df[,2:12], 1, function(x) x[order(x, decreasing=T)[2]])
+# df <- df %>% mutate(usage_diff_top2 = max_usage-max2nd_usage)
+# 
+# df %>%
+#   filter(GEP_with_max_usage %in% paste0("GEP", 3:6)) %>%
+#   # filter(GEP_with_2nd_max_usage %in% paste0("GEP", 3:6)) %>%
+#   ggplot(aes(x=factor(GEP_with_2nd_max_usage, levels=paste0("GEP", 1:11)), y=usage_diff_top2))+
+#   geom_boxplot(outlier.shape=NA)+
+#   # geom_violin()+
+#   geom_jitter(width=0.1, size=0.1)+
+#   ylim(0,1)+
+#   # facet_wrap(~GEP_with_max_usage)+
+#   facet_grid(tcell_lineage~GEP_with_max_usage)+
+#   theme_bw()+
+#   labs(x="GEP with 2nd highest usage", y="(max usage) - (2nd highest usage)", title="Usage difference between top 2 GEPs")+
+#   theme(axis.text.x=element_text(angle=45, hjust=1),
+#         strip.text=element_text(size=15))
+```
+
+This is a bit too complex, so let's restrict to GEPs of interest
+```{r diff-with-second-GEP-to-GEP3, fig.width=8, fig.height=4}
+# # GEP3
+# df %>%
+#   mutate(usage_diff_top2 = max_usage-max2nd_usage) %>%
+#   filter(GEP_with_max_usage == "GEP3") %>%
+#   filter(tcell_lineage != "MAIT") %>%
+#   ggplot(aes(x=factor(GEP_with_2nd_max_usage, levels=paste0("GEP", 1:11)), y=usage_diff_top2))+
+#   geom_boxplot(outlier.shape=NA)+
+#   geom_jitter(width=0.1, size=0.1)+
+#   ylim(0,1)+
+#   facet_wrap(~tcell_lineage, nrow=1)+
+#   # facet_grid(tcell_lineage~GEP_with_max_usage)+
+#   theme_bw()+
+#   labs(x="GEP with 2nd highest usage", y="(GEP3 usage) - (2nd highest usage)", title="Cells with max usage of GEP3")+
+#   theme(axis.text.x=element_text(angle=45, hjust=1),
+#         strip.text=element_text(size=15))
+# 
+# # GEP4
+# df %>%
+#   mutate(usage_diff_top2 = max_usage-max2nd_usage) %>%
+#   filter(GEP_with_max_usage == "GEP4") %>%
+#   filter(tcell_lineage != "MAIT") %>%
+#   ggplot(aes(x=factor(GEP_with_2nd_max_usage, levels=paste0("GEP", 1:11)), y=usage_diff_top2))+
+#   geom_boxplot(outlier.shape=NA)+
+#   geom_jitter(width=0.1, size=0.1)+
+#   ylim(0,1)+
+#   facet_wrap(~tcell_lineage, nrow=1)+
+#   # facet_grid(tcell_lineage~GEP_with_max_usage)+
+#   theme_bw()+
+#   labs(x="GEP with 2nd highest usage", y="(GEP4 usage) - (2nd highest usage)", title="Cells with max usage of GEP4")+
+#   theme(axis.text.x=element_text(angle=45, hjust=1),
+#         strip.text=element_text(size=15))
+# 
+# # GEP5
+# df %>%
+#   mutate(usage_diff_top2 = max_usage-max2nd_usage) %>%
+#   filter(GEP_with_max_usage == "GEP5") %>%
+#   filter(!tcell_lineage %in% c("CD4", "CD8")) %>%
+#   ggplot(aes(x=factor(GEP_with_2nd_max_usage, levels=paste0("GEP", 1:11)), y=usage_diff_top2))+
+#   geom_boxplot(outlier.shape=NA)+
+#   geom_jitter(width=0.1, size=0.1)+
+#   ylim(0,1)+
+#   facet_wrap(~tcell_lineage, nrow=1)+
+#   # facet_grid(tcell_lineage~GEP_with_max_usage)+
+#   theme_bw()+
+#   labs(x="GEP with 2nd highest usage", y="(GEP5 usage) - (2nd highest usage)", title="Cells with max usage of GEP5")+
+#   theme(axis.text.x=element_text(angle=45, hjust=1),
+#         strip.text=element_text(size=15))
+```
+
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
