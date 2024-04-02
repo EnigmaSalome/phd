@@ -38,17 +38,17 @@ cols_cellstate <- c("Tnaive"= "#b3e2cd",
                     "Treg" = "#fbb4ae")
 
 # GEP assignment ####
-cols_GEPs <-  c("gep1"  =  "#f5bb50",
-                "gep2"  =  "#ada43b",
-                "gep3"  =  "#b0799a",
-                "gep4"  =  "#f6b3b0",
-                "gep5"  =  "#bf3729",
-                "gep6"  =  "#17154f",
-                "gep7"  =  "#355828",
-                "gep8"  =  "#e48171",
-                "gep9"  =  "#2f357c",
-                "gep10" =  "#6c5d9e",  
-                "gep11" =  "#e69b00")
+cols_GEPs <-  c("GEP1"  =  "#f5bb50",
+                "GEP2"  =  "#ada43b",
+                "GEP3"  =  "#b0799a",
+                "GEP4"  =  "#f6b3b0",
+                "GEP5"  =  "#bf3729",
+                "GEP6"  =  "#17154f",
+                "GEP7"  =  "#355828",
+                "GEP8"  =  "#e48171",
+                "GEP9"  =  "#2f357c",
+                "GEP10" =  "#6c5d9e",  
+                "GEP11" =  "#e69b00")
 
 # PBMC cluster colors by lineage ####
 cols_thym_cd4  <-

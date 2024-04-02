@@ -224,6 +224,8 @@ genes_dotplot <- c(
   "TCF7",
   "LEF1",
   "CD27",
+  # "NT5E",
+  # "CD7",
   # ------
   # Tcm
   "AHR",
