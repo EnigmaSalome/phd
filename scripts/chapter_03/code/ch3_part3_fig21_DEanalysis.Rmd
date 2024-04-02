@@ -141,7 +141,8 @@ dMcast<-function(data,formula,fun.aggregate='sum',value.var=NULL,as.factors=FALS
 
 
 
-# ANALYSIS
+
+# DE ANALYSIS BETWEEN PBMC
 
 ## Prepare metadata and counts
 ```{r analysis-1}
@@ -359,6 +360,229 @@ pheatmap::pheatmap(t(counts.correc.sig),
                    fontsize_row=6,
                    # title
                    main="PBMC: DE genes btw all lineages (batches E-I, ncells>50)")
+# dev.off()
+```
+
+
+
+
+# DE ANALYSIS BETWEEN TINN CELLS IN GEP5
+
+## Prepare metadata and counts
+```{r analysis-1}
+counts   <- seur_integrated@assays$RNA@counts
+metadata <- seur_integrated@meta.data
+
+# Subset metadata only to information we're interested in (tissue, cell identity, batch, and clusters)
+metadata <- metadata[,c("tissue", "tcell_lineage", "batch_id", "clusters_integrated_data", "donor_id", "GEP_with_max_usage")]
+colnames(metadata) <- c("tissue_id", "cell_id", "batch_id", "cluster_id", "donor_id", "gep_id")
+head(metadata) # sanity check
+
+# Create a "groups" df that will (1) keep only cells of interest; (2) keep the columns of interest (that will define how we group counts)
+groups <- metadata %>%
+  rownames_to_column("cell") %>%
+  # keep only Tinn cells in GEP5
+  filter(tissue_id=="PBMC" & gep_id=="GEP5") %>%
+  # create new variable that integrates batch and donor
+  mutate(batchdonor_id=paste0(batch_id, donor_id)) %>%
+  # keep only groups that will be comparable
+  filter(batchdonor_id %in% c("E5", "F6", "I11")) %>%
+  # keep only groups with at least 50 cells
+  group_by(cell_id, batchdonor_id, cluster_id) %>%
+  filter(n()>50) %>%
+  ungroup() %>%
+  # keep only columns of interest
+  column_to_rownames("cell") %>%
+  dplyr::select(cell_id, batchdonor_id, cluster_id) %>%
+  # adapt a few variables
+  mutate(cluster_id=as.character(cluster_id)) %>%
+  dplyr::rename(lineage_id=cell_id)
+head(groups) # sanity check
+
+
+# AGGREGATE COUNTS
+count.agg <- t(counts[, which(colnames(counts) %in% rownames(groups))]) # keep only cells of interest (defined in "groups") & put cells in rows (genes as columns)
+nrow(groups) == nrow(count.agg) # verify nb of cells in "groups" (rows) is same nb of cells in "count.agg" (rows)
+count.agg <- aggregate.Matrix(count.agg, groupings = groups, fun = "sum") # aggregate counts based on columns in "groups"
+
+# Sanity checks
+dim(count.agg)[2] == nrow(seur_integrated) # same nb of genes in seurat object & count.agg
+count.agg[1:6, 1:6]
+table(colSums(count.agg) == 0) # check if any gene has total count of 0
+
+# Final counts for DESeq (groups as columns, genes as rows)
+counts.deseq <- data.frame(t(count.agg))
+counts.deseq <- counts.deseq[rowSums(counts.deseq)!=0,] # remove genes that have total count of 0
+
+
+# PREPARE METADATA DF FOR DESEQ
+# Have metadata df where rownames are the colnames of "counts.deseq" (the groups)
+metadf.deseq <- groups %>%
+  distinct() %>%
+  unite(sample_id, remove=FALSE)
+rownames(metadf.deseq) <- metadf.deseq$sample_id
+
+# Check that the row names of metadf.deseq are the same as the column names of counts.deseq in order to use as input to DESeq2
+nrow(metadf.deseq)==ncol(counts.deseq)
+metadf.deseq <- metadf.deseq[match(colnames(counts.deseq), rownames(metadf.deseq)),] # reorder rows in metadf.deseq to match order of columns in counts.deseq
+all(rownames(metadf.deseq) == colnames(counts.deseq))
+```
+
+
+## Run DE lineage by lineage
+```{r analysis-2}
+cellTypeSignature_Tinn <- function(cell.1, norm="rlog", padj_max=0.05, log2FC_min=0.5, shrinkage=F, DEmethod="LRT"){
+  
+  # All cell lineages
+  allcells <- c("MAIT", "iNKT", "GD")
+  allothercells <- allcells[allcells != cell.1]
+  
+  # Initialize
+  genes.up <- list()
+  
+  # Loop
+  for (cell.2 in allothercells){
+    print(paste0(cell.1, "vs", cell.2))
+    
+    # 1. Create DDS object with only contrast of interest
+    metadf.temp <- metadf.deseq %>%
+      filter(lineage_id %in% c(cell.1, cell.2)) %>%
+      mutate(lineage_id=factor(lineage_id, levels=unique(lineage_id)))
+    counts.temp <- counts.deseq[,rownames(metadf.temp)]
+    # table(colnames(counts.temp)==rownames(metadf.temp))
+    dds.temp <- DESeqDataSetFromMatrix(counts.temp, colData = metadf.temp, design = ~ batchdonor_id + lineage_id + cluster_id)
+    
+    # 2. Normalize, batch-correct counts and plot PCA
+    # if(norm=="rlog"){rld.temp <- rlog(dds.temp, blind=TRUE)}
+    # else if(norm=="vst"){rld.temp <- vst(dds.temp, blind=TRUE)}
+    # counts_batchcorrect.temp <- limma::removeBatchEffect(x=assay(rld.temp),
+    #                                                      batch=metadf.temp$batchdonor_id,
+    #                                                      design=model.matrix(~ lineage_id + cluster_id, metadf.temp))
+    # counts_pca.temp <- ddsPCA(counts.batchcorrect = counts_batchcorrect.temp, metadf=metadf.temp)
+    # Plot PCA on batch-corrected counts
+    # ggplot(counts_pca.temp, aes(x = PC1, y = PC2, color = lineage_id, shape=batch_id)) +
+    #   geom_point(size = 4) +
+    #   # xlab(paste0("PC1: ", round(percentVar[1] * 100), "% variance")) +
+    #   # ylab(paste0("PC2: ", round(percentVar[2] * 100), "% variance")) +
+    #   coord_fixed(expand=TRUE)+
+    #   scale_color_manual(values=cols_lineages)
+    # ggplot(counts_pca.temp, aes(x = PC1, y = PC2, color = cluster_id, shape=batch_id)) +
+    #   geom_point(size = 4) +
+    #   # xlab(paste0("PC1: ", round(percentVar[1] * 100), "% variance")) +
+    #   # ylab(paste0("PC2: ", round(percentVar[2] * 100), "% variance")) +
+    #   coord_fixed(expand=TRUE)+
+    #   scale_color_manual(values=cols_integrated)
+    
+    # 3. Run DESeq2 (LRT test): parameters based on recommendations
+    # https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#recommendations-for-single-cell-analysis
+    dds.temp <- DESeq(dds.temp, test=DEmethod, reduced=~batchdonor_id+cluster_id, useT=TRUE, minmu=1e-6, minReplicatesForReplace = Inf)
+    # plotDispEsts(dds.temp) # Plot dispersion estimates
+    contrastvec <- c("lineage_id", cell.1, cell.2)
+    res.temp <- results(dds.temp, contrast = contrastvec, alpha = 0.05)
+    if(shrinkage==T){
+      print("Shrinking LFC")
+      res.temp <- lfcShrink(dds.temp, type="ashr", contrast = contrastvec, res=res.temp)
+    }
+    # print(res.temp)
+    genes.sig.temp <- res.temp %>% data.frame() %>% filter(padj<padj_max & log2FoldChange>log2FC_min)
+    print(paste0("# upregulated genes:", nrow(genes.sig.temp)))
+    
+    # 4. Save list of DE genes
+    genes.up[[paste0(cell.1, "vs", cell.2)]] <- rownames(genes.sig.temp)
+  } # FOR LOOP
+  
+  return(genes.up)
+}
+
+
+# *************************************************
+## 3.2. Get lineage-specific upregulated genes ####
+
+# Get upregulated genes (note: shrinkage if Wald test, but LRT recommended for scRNAseq data)
+maitup_gep5 <- cellTypeSignature_Tinn(cell.1="MAIT",  padj_max=0.05, log2FC_min = 0.1, shrinkage=F)
+nktup_gep5  <- cellTypeSignature_Tinn(cell.1="iNKT",  padj_max=0.05, log2FC_min = 0.1, shrinkage=F)
+gdtup_gep5  <- cellTypeSignature_Tinn(cell.1="GD",    padj_max=0.05, log2FC_min = 0.1, shrinkage=F)
+```
+
+```{r}
+# Bind them
+genes.lineage.gep5 <- unique(c(
+  plyr::count(Reduce(c, maitup_gep5)) %>% filter(freq>=1) %>% pull(x),
+  plyr::count(Reduce(c, nktup_gep5))  %>% filter(freq>=1) %>% pull(x),
+  plyr::count(Reduce(c, gdtup_gep5))  %>% filter(freq>=1) %>% pull(x)
+))
+```
+
+
+Get batch corrected counts with limma
+```{r analysis-1}
+# CREATE DESEQ2 OBJECT
+dds <- DESeqDataSetFromMatrix(counts.deseq, 
+                              colData = metadf.deseq,
+                              design = ~ batchdonor_id + lineage_id + cluster_id)
+
+
+# ****************************
+## 2.2. PCA on the groups ####
+
+# Transform counts for data visualization
+rld <- rlog(dds, blind=TRUE)
+# rld <- vst(dds)
+# head(assay(rld))
+
+# Plot PCA
+# DESeq2::plotPCA(rld, intgroup = "sample_id")
+# DESeq2::plotPCA(rld, intgroup = "batch_id")
+# DESeq2::plotPCA(rld, intgroup = "lineage_id")
+
+# Correct for batch effect
+counts_batchcorrect <- limma::removeBatchEffect(
+  x=assay(rld),
+  batch=metadf.deseq$batchdonor_id,
+  design=model.matrix(~ lineage_id + cluster_id, metadf.deseq)
+)
+```
+
+
+Plot heatmap
+```{r analysis-2, fig.height=10}
+# Get corrected counts (that we batch corrected with limma earlier)
+counts.correc.sig <- t(counts_batchcorrect[genes.lineage.gep5,]) # keep only the genes of interest
+counts.correc.sig[,1:5]
+dim(counts.correc.sig)
+
+# Reorder by lineage and cluster (not by batch)
+counts.correc.sig <- counts.correc.sig[metadf.deseq %>% arrange(lineage_id, as.numeric(cluster_id)) %>% pull(sample_id),]
+# cols_batchdonorid <- pals::brewer.greys(length(unique(metadf.deseq$batchdonor_id)))
+cols_batchdonorid <- c("lightgrey", "darkgrey", "grey")
+names(cols_batchdonorid) <- unique(metadf.deseq$batchdonor_id)
+
+# Run pheatmap using the metadata data frame for the annotation
+# pdf("./data/figures/chapter_03/figs_unfinished/section3/ch3_fig18_DEanalysis_batchE5-I11_min50cells_lineagespecific_upregulatedgenes_heatmap_padj0_05.pdf", width=10, height=10)
+pheatmap::pheatmap(t(counts.correc.sig),
+                   color = rev(colorRampPalette(brewer.pal(10, "RdBu"))(100)),
+                   scale = "row", # z-score
+                   clustering_method="ward.D2",
+                   cluster_rows = T,
+                   cluster_cols = F,
+                   border_color = NA,
+                   # Columns (cell groups)
+                   # gaps_col=c(16,31,48, 58),
+                   # gaps_col=c(10,18,27,32),
+                   show_colnames = T,
+                   fontsize_col = 6,
+                   annotation_col = metadf.deseq %>% dplyr::select(c(lineage_id, batchdonor_id, cluster_id)),
+                   annotation_colors = list(
+                     lineage_id = cols_lineages,
+                     batchdonor_id=cols_batchdonorid,
+                     # batchdonor_id=c("lightgrey", "darkgrey"),
+                     cluster_id=cols_integrated[names(cols_integrated) %in% unique(metadf.deseq$cluster_id)]
+                   ),
+                   # Rows (genes)
+                   show_rownames=T,
+                   fontsize_row=6,
+                   # title
+                   main="PBMC: DE genes btw all lineages (batches EFI, ncells>50)")
 # dev.off()
 ```
 
