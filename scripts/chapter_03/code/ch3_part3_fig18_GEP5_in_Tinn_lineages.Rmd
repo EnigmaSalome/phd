@@ -1,0 +1,359 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+
+seur_pbmc_nkt <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_nkt_clean.rds")
+seur_pbmc_mait <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_mait_clean.rds")
+seur_pbmc_gdt <- readRDS("./data/seurat_objects/pbmc_objects/seurat_pbmc_gdt_clean.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_gepusage <- function(seurobj=seur_integrated, gep, file_name="no"){
+  p <- do_FeaturePlot(
+    seurobj,
+    features=paste0(gep,"_usage"),
+    order=T,
+    use_viridis=T,
+    viridis.palette = "D"
+  )
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)+
+    theme(
+      panel.background = element_rect(fill='transparent'),
+      plot.background = element_rect(fill='transparent', color=NA),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      legend.background = element_rect(fill='transparent'),
+      legend.box.background = element_rect(fill='transparent')
+    )
+    if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section3/", file_name),
+           plot=p,
+           width=5, height=5, units="in")
+  }
+  return(p)
+}
+
+
+lineage_nebulosagenes <- function(seuratobj, genes_vector, pgrid_ncol=2, pgrid_size=c(10,30), file_name="no"){
+  pnebulosa <- list()
+  for(gene in genes_vector) {
+    p <- SCpubr::do_NebulosaPlot(seuratobj, features = gene, sequential.palette="YlOrRd")
+    p <- ggrastr::rasterise(p, layers="Point", dpi=200)
+    pnebulosa[[gene]] <- p
+  }
+  pgrid <- plot_grid(plotlist=pnebulosa, ncol=pgrid_ncol)
+  print(pgrid)
+  
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section3/", file_name),
+           plot=pgrid,
+           width=pgrid_size[1], height=pgrid_size[2])
+  }
+}
+
+
+lineage_dimplot <- function(seurobj, col_vector, file_name="no"){
+  p <- do_DimPlot(
+    seurobj,
+    group.by="clusters_integrated_data",
+    colors.use = cols_integrated,
+    legend.position = "right",
+    # raster = T,
+    # raster.dpi=2048,
+    pt.size = 0.5#,
+    # border.size=1.5
+  )+
+    theme(
+      # axis.title=element_text(size=8),
+      # axis.text=element_text(size=6),
+      legend.key.size = unit(0.4, "cm"),
+      legend.title=element_text(size=8),
+      legend.text = element_text(size=6)
+    )
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)
+  if(file_name != "no"){
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section3/", file_name),
+           plot=p,
+           width=4, height=2.5, units="in")
+  }
+  return(p)
+}
+
+plot_gep5assign <- function(seurobj, cells_to_highlight=c("GEP5"="darkred"), file_name="no"){
+  Idents(seurobj) <- "GEP_with_max_usage"
+  if(file_name != "no"){
+    p <- do_DimPlot(
+      sample = seurobj,
+      idents.keep=names(cells_to_highlight),
+      colors.use = cells_to_highlight,
+      pt.size=12,
+      border.size = 1.5,
+      raster=T,
+      raster.dpi = 2048
+    )
+    ggsave(paste0("~/Projects/phd/data/figures/chapter_03/figs_unfinished/section3/", file_name),
+           plot=p,
+           width=3, height=2.5, units="in")
+  }
+  else if(file_name=="no"){
+    p <- do_DimPlot(
+      sample = seurobj,
+      idents.keep=names(cells_to_highlight),
+      colors.use = cells_to_highlight
+    )
+    return(p)
+  }
+}
+
+```
+
+
+
+
+# PLOT GEP USAGE
+
+## Add GEP usages to individual seurat objects
+First we need to add the GEP usages to the individual seurat objects
+```{r}
+# sanity checks
+table(rownames(seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue=="iNKT_PBMC",])==rownames(seur_pbmc_nkt@meta.data), useNA="ifany")
+table(rownames(seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue=="MAIT_PBMC",])==rownames(seur_pbmc_mait@meta.data), useNA="ifany")
+table(rownames(seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue=="GD_PBMC",])==rownames(seur_pbmc_gdt@meta.data), useNA="ifany")
+
+# add GEP5_usage and GEP_with_max_usage
+cols_to_add <- c("clusters_integrated_data", "GEP3_usage", "GEP4_usage", "GEP5_usage", "GEP6_usage", "GEP_with_max_usage")
+seur_pbmc_nkt@meta.data[,cols_to_add] <- seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue=="iNKT_PBMC",cols_to_add]
+seur_pbmc_mait@meta.data[,cols_to_add] <- seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue=="MAIT_PBMC",cols_to_add]
+seur_pbmc_gdt@meta.data[,cols_to_add] <- seur_integrated@meta.data[seur_integrated@meta.data$tcell_lineage_tissue=="GD_PBMC",cols_to_add]
+```
+
+
+## iNKT figure
+```{r figure-inkt}
+plot_gepusage(
+  seurobj = seur_pbmc_nkt,
+  # file_name="ch3_fig18_nkt_GEP5_usage.pdf",
+  gep="GEP5"
+  )
+plot_gep5assign(
+  seur_pbmc_nkt,
+  file_name="no"
+  # file_name = "ch3_fig18_nkt_highlight_GEP5_assign.pdf"
+  )
+lineage_nebulosagenes(
+  seur_pbmc_nkt,
+  genes_vector="CD4",
+  # file_name = "ch3_fig18_nkt_density_CD4.pdf",
+  pgrid_size = c(5,5),
+  pgrid_ncol=1
+  )
+# lineage_dimplot(seur_pbmc_nkt)
+```
+
+
+## MAIT figure
+```{r figure-mait}
+plot_gepusage(
+  seurobj = seur_pbmc_mait,
+  # file_name="ch3_fig18_mait_GEP5_usage.pdf",
+  gep="GEP5"
+  )
+plot_gep5assign(
+  seur_pbmc_mait,
+  file_name="no"
+  # file_name = "ch3_fig18_mait_highlight_GEP5_assign.pdf"
+  )
+```
+
+
+## GD figure
+```{r figure-inkt}
+plot_gepusage(
+  seurobj = seur_pbmc_gdt,
+  # file_name="ch3_fig18_gdt_GEP5_usage.pdf",
+  gep="GEP5"
+  )
+plot_gep5assign(
+  seur_pbmc_gdt,
+  file_name="no"
+  # file_name = "ch3_fig18_gdt_highlight_GEP5_assign.pdf"
+  )
+```
+
+Clean up data a bit
+```{r TCRdelta-usage}
+gd.tcr <- seur_pbmc_gdt@meta.data %>%
+  rownames_to_column("cellid") %>%
+  as_tibble() %>%
+  select(cellid, clusters_per_lineage, GEP5_usage, GEP6_usage, GEP_with_max_usage, grep("_gene_Dominant", colnames(seur_pbmc_gdt@meta.data), value=T)) %>%
+  dplyr::rename(TRGV = TCR_Alpha_Gamma_V_gene_Dominant,
+                TRGJ = TCR_Alpha_Gamma_J_gene_Dominant,
+                TRDV = TCR_Beta_Delta_V_gene_Dominant,
+                TRDD = TCR_Beta_Delta_D_gene_Dominant,
+                TRDJ = TCR_Beta_Delta_J_gene_Dominant) %>%
+  na.omit(!clusters_per_lineage) %>%
+  mutate(TRGV = str_remove(TRGV, pattern = "\\*[^.]*$"),
+         TRGJ = str_remove(TRGJ, pattern = "\\*[^.]*$"),
+         TRDV = str_remove(TRDV, pattern = "\\*[^.]*$"),
+         TRDD = str_remove(TRDD, pattern = "\\*[^.]*$"),
+         TRDJ = str_remove(TRDJ, pattern = "\\*[^.]*$")) %>%
+  filter(!TRGV %in% grep("TRA", TRDV, value=T)) %>%
+  filter(!TRDD %in% grep("TRB", TRDD, value=T)) %>%
+  filter(!TRDJ %in% grep("TRB", TRDJ, value=T)) %>%
+  mutate(vd2vg9=case_when(
+    TRDV=="TRDV2" & TRGV=="TRGV9" ~ "Vd2Vg9",
+    TRDV=="TRDV2" & TRGV!="TRGV9" ~ "Vd2+Vg9-",
+    TRDV!="TRDV2" ~ "Vd2-"
+    ))
+
+# sanity checks
+table(gd.tcr[,c("TRDV", "vd2vg9")], useNA="ifany")
+table(gd.tcr[,c("TRGV", "vd2vg9")], useNA="ifany")
+# table(gd.tcr[,c("GEP_with_max_usage", "vd2vg9")], useNA="ifany")
+```
+
+Now plot GEP5 usage in VD2VG9 vs non-VD2VG9 cells
+```{r analysis-2}
+p <- ggplot(gd.tcr, aes(x=vd2vg9, y=GEP5_usage))+
+  geom_boxplot(outlier.shape=NA)+
+  geom_jitter(aes(color=factor(GEP_with_max_usage, levels=paste0("GEP", 1:11))), width=0.2)+
+  scale_color_manual(values=cols_GEPs, name="GEP assignment")+
+  labs(x="", y="GEP5 usage")+
+  ylim(c(0,1))+
+  theme_bw()+
+    theme(axis.text.x=element_text(angle=45, hjust=1),
+          strip.text=element_text(size=15))
+# save plot
+# p <- ggrastr::rasterise(p, layers="Point", dpi=300)
+# ggsave(
+#   filename="./data/figures/chapter_03/figs_unfinished/section3/ch3_fig18_gdt_GEP5_usage_vd2.pdf",
+#   plot=p,
+#   width=5, height=5)
+```
+
+
+## GD plot GEP5 vs GEP6 usage
+```{r analysis-3}
+# GEP5 vs GEP6 and gep assignment
+ggplot(gd.tcr, aes(x=GEP5_usage, y=GEP6_usage))+
+  geom_point(aes(color=factor(GEP_with_max_usage, levels=paste0("GEP", 1:11))))+
+  scale_color_manual(values=cols_GEPs, name="GEP assignment")+
+  xlim(c(0,1))+
+  ylim(c(0,1))+
+  labs(x="GEP5 usage", y="GEP6 usage")+
+  theme_bw()
+# ggsave("./data/figures/chapter_03/figs_unfinished/section3/ch3_fig18_gdt_GEP5_usage_vd2.pdf", width=5, height=5)
+
+# GEP5 vs GEP6 and Vd usage
+ggplot(gd.tcr, aes(x=GEP5_usage, y=GEP6_usage))+
+  geom_point(aes(color=vd2vg9))+
+  scale_color_manual(values=c("darkgrey", "blue", "lightblue"))+
+  xlim(c(0,1))+
+  ylim(c(0,1))+
+  labs(x="GEP5 usage", y="GEP6 usage")+
+  theme_bw()
+```
+
+
+Plot against GZM
+```{r analysis-4}
+# get GZM expression
+gzm_expression <- t(as.data.frame(seur_pbmc_gdt@assays$RNA@data[c("GZMK", "GZMB"),gd.tcr$cellid]))
+head(gzm_expression)
+# table(rownames(gzm_expression)==gd.tcr$cellid, useNA="ifany")
+gd.tcr.gzm <- cbind(gd.tcr, gzm_expression)
+
+
+# GEP5 vs GZMK
+p1 <- ggplot(gd.tcr.gzm, aes(x=GEP5_usage, y=GZMK))+
+  geom_point(aes(color=vd2vg9))+
+  scale_color_manual(values=c("darkgrey", "blue", "lightblue"))+
+  xlim(c(0,1))+
+  # ylim(c(0,1))+
+  labs(x="GEP5 usage", y="GZMK")+
+  theme_bw()+
+  theme(legend.position="none")
+
+# GEP5 vs GZMB
+p2 <- ggplot(gd.tcr.gzm, aes(x=GEP5_usage, y=GZMB))+
+  geom_point(aes(color=vd2vg9))+
+  scale_color_manual(values=c("darkgrey", "blue", "lightblue"))+
+  xlim(c(0,1))+
+  # ylim(c(0,1))+
+  labs(x="GEP5 usage", y="GZMB")+
+  theme_bw()+
+  theme(legend.position="none")
+
+
+# GEP6 vs GZMK
+p3 <- ggplot(gd.tcr.gzm, aes(x=GEP6_usage, y=GZMK))+
+  geom_point(aes(color=vd2vg9))+
+  scale_color_manual(values=c("darkgrey", "blue", "lightblue"))+
+  xlim(c(0,1))+
+  # ylim(c(0,1))+
+  labs(x="GEP6 usage", y="GZMK")+
+  theme_bw()+
+  theme(legend.position="none")
+
+# GEP5 vs GZMB
+p4 <- ggplot(gd.tcr.gzm, aes(x=GEP6_usage, y=GZMB))+
+  geom_point(aes(color=vd2vg9))+
+  scale_color_manual(values=c("darkgrey", "blue", "lightblue"))+
+  xlim(c(0,1))+
+  # ylim(c(0,1))+
+  labs(x="GEP6 usage", y="GZMB")+
+  theme_bw()+
+  theme(legend.position="none")
+
+plot_grid(p1,p3,p2,p4,nrow=2)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+

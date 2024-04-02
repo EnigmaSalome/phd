@@ -1,0 +1,241 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(ggrepel)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+seur_pbmc <- subset(seur_integrated, subset=tissue=="PBMC")
+
+# gene scores from cNMF
+cnmf_spectra <- read.csv("./data/cnmf/non_imputed_cNMF_allcells.gene_spectra_score.k_12.dt_0_02.txt", sep="\t", row.names=1)
+dim(cnmf_spectra)
+rownames(cnmf_spectra) <- paste0("GEP", c(2,5,3,1,4,12,6,7,8,10,9,11))
+head(cnmf_spectra)
+# table(colnames(cnmf_spectra)%in%rownames(seur_integrated))
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_gep_rank <- function(cnmf_df=cnmf_spectra, genes_to_highlight){
+  plist <- list()
+  for(gp in paste0("GEP", 3:6)){
+    # print(gp)
+    df <- NULL
+    df <- cnmf_df %>%
+      t() %>%
+      as.data.frame() %>%
+      rownames_to_column("gene") %>%
+      pivot_longer(cols = !gene,
+                   names_to = "gep",
+                   values_to = "value") %>%
+      filter(gep == gp) %>%
+      mutate(rank = dense_rank(-value))
+    
+    p <- ggplot(df, aes(x = rank, y = value)) +
+      geom_hline(yintercept = 0, linetype = "dashed", color="grey") +
+      geom_point(size = 0.5) +
+      geom_label_repel(
+        data = df %>% filter(gene %in% genes_to_highlight),
+        aes(label = gene),
+        # nudge_y = 0.001,
+        nudge_x = -1000,
+        min.segment.length = 0,
+        force = 10,
+        force_pull = 0.01,
+        max.time=2,
+        max.overlaps = Inf
+      ) +
+      labs(x = "rank", y = "regression coefficient", title = gp) +
+      ylim(c(-0.002, 0.0027)) +
+      scale_x_continuous(expand=expansion(mult=0.2))+
+      theme_classic() +
+      theme(panel.border = element_rect(fill = NA),
+            axis.line = element_blank())
+    p <- ggrastr::rasterise(p, layers="Point", dpi=300)
+    plist[[gp]] <- p
+  }
+  
+  pcombined <- plot_grid(plotlist = plist, nrow=1)
+  
+  return(pcombined)
+}
+
+
+
+plot_DotPlot <-
+  function(
+    seurobj,
+    group,
+    features,
+    scaling = T,
+    col_gradient = c(scales::muted("blue"), "white", scales::muted("red"))
+  ) {
+    
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=features,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=features.plot, y=factor(id, levels=rev(paste0("GEP", 3:6))), fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,10), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(
+      # axis.text.y=element_text(),
+      axis.text.x=element_text(face="italic", angle=45, hjust=1)
+    )+
+    labs(y="", x="")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=col_gradient[1], mid=col_gradient[2], high=col_gradient[3], name="z-score\nnormalized\navg expression")
+  } else{
+    p <- p + scale_fill_gradient2(low=col_gradient[1], mid=col_gradient[2], high=col_gradient[3], name="normalized\navg expression")
+  }
+  return(p)
+}
+```
+
+
+
+
+# ANALYSIS
+
+## Plot type 1 and type 3 immunity genes ranks on GEP5
+```{r analysis-1, fig.width=15, fig.height=5}
+genes_to_plot <- list(
+  "type1"=c(
+    # type 1
+    "TBX21",
+    "EOMES",
+    "IFNG",
+    "TNF",
+    "CCR5",
+    "CXCR3", #?
+    "SLAMF7",
+    "GZMK",
+    "PRF1"
+    # "GZMA",
+    # "KLRB1",
+    # "ZBTB16",
+    # "CEBPD",
+    # "IL12RB2",
+    # "IL18R1"
+    # "CCL5"
+  ),
+  "type3"=c(
+    # type 3
+    "RORC",
+    "RORA",
+    "AHR",
+    "CCR6",
+    # "IL17A",
+    # "IL22",
+    "IL17RE",
+    # "IL6R",
+    # "TGFBR1",
+    # "TGFBR2",
+    "IL23R"
+  )
+)
+
+plot_gep_rank(genes_to_highlight = genes_to_plot$type1)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section3/ch3_fig19_GEP5_regressioncoef_type1genes.pdf", width=15, height=4)
+
+plot_gep_rank(genes_to_highlight = genes_to_plot$type3)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section3/ch3_fig19_GEP5_regressioncoef_type3genes.pdf", width=15, height=4)
+```
+
+
+## Plot DotPlot
+```{r analysis-2}
+plot_DotPlot(
+  seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+  group = "GEP_with_max_usage",
+  features = genes_to_plot$type1,
+  # scaling=F,
+  col_gradient=c(scales::muted("blue"), "white", scales::muted("red"))
+)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section3/ch3_fig19_GEP5_dotplot_type1genes.pdf", width=6, height=4)
+
+plot_DotPlot(
+  seurobj = subset(seur_pbmc, subset=GEP_with_max_usage %in% paste0("GEP", 3:6)),
+  group = "GEP_with_max_usage",
+  features = genes_to_plot$type3,
+  # scaling=F,
+  col_gradient=c(scales::muted("blue"), "white", scales::muted("red"))
+)
+# ggsave("./data/figures/chapter_03/figs_unfinished/section3/ch3_fig19_GEP5_dotplot_type3genes.pdf", width=6, height=4)
+```
+
+## Analysis 1
+```{r analysis-1}
+
+```
+
+
+## Analysis 2
+```{r analysis-2}
+
+```
+
+## Analysis 3
+```{r analysis-3}
+
+```
+
+
+## Analysis 4
+```{r analysis-4}
+
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
