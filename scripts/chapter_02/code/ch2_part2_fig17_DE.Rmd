@@ -247,7 +247,8 @@ runDeseq <- function(counts_matrix, groups_df, contrast, genes_sanitycheck=c("RU
   # return
   return(list(
    "counts_corrected"=counts_corrected,
-   "degenes"=result.df
+   "degenes"=result.df,
+   "allgenes"=res
   ))
 }
 ```
@@ -301,6 +302,8 @@ p_cd4iNKT
 # grid::grid.newpage()
 # grid::grid.draw(p_cd4iNKT$gtable)
 # dev.off()
+
+# deseq_cd4inkt$allgenes["CD40LG",]
 ```
 
 ```{r cd4-inkt-umaps, fig.width=8}
