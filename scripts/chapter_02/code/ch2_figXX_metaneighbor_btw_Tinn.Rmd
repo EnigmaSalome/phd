@@ -1,0 +1,318 @@
+---
+title: "Chapter X - R Notebook"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+library(MetaNeighbor)
+library(SummarizedExperiment)
+library(ComplexHeatmap)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+DimPlot(seur_integrated, reduction="umap_integrated", cols = cols_integrated)
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_mtn_heatmap <- function(
+    mtn_matrix,
+    vector_groups_with_min_cells,
+    df_annotation,
+    df_nbcells,
+    grouping_labels=c("a", "b", "c"),
+    heatmapclus=F
+    ){
+  
+  # keep only groups that have at least 100 cells
+  cat("Metaneighbor matrix dimensions:", dim(mtn_matrix), "\n") # 88 rows & columns
+  mtn_sub <- mtn_matrix[rownames(mtn_matrix) %in% vector_groups_with_min_cells, colnames(mtn_matrix) %in% vector_groups_with_min_cells]
+  cat("Metaneighbor matrix without groups < 100 cells:", dim(mtn_sub), "\n") # 43 rows and 43 columns
+  
+  # reorder rows & columns by cluster
+  groups_order_rows <- df_annotation[rownames(mtn_sub),] %>% arrange(grouping1, grouping2)
+  groups_order_cols <- df_annotation[colnames(mtn_sub),] %>% arrange(grouping1, grouping2)
+  mtn_sub <- mtn_sub[rownames(groups_order_rows), rownames(groups_order_cols)]
+  cat("\nOrder matrix rows:", rownames(mtn_sub), "\n\n")
+  cat("Order matrix columns:", colnames(mtn_sub), "\n\n")
+  
+  # row annotation
+  row_annot <-
+    rowAnnotation(
+      # annotations
+      nbcells=anno_barplot(
+        df_nbcells %>% filter(group %in% rownames(mtn_sub)) %>% arrange(match(group, rownames(mtn_sub))) %>% pull(n),
+        axis_param = list(direction = "reverse")
+        ),
+      grouping1=df_annotation[rownames(mtn_sub),"grouping1"],
+      grouping2=df_annotation[rownames(mtn_sub),"grouping2"],
+      # annotation labels
+      annotation_label=c(grouping_labels[1], grouping_labels[2], grouping_labels[3]),
+      # annotation colors
+      col=list(
+        grouping1=deframe(df_annotation[rownames(mtn_sub),c("grouping1", "col_grouping1")]),
+        grouping2=deframe(df_annotation[rownames(mtn_sub),c("grouping2", "col_grouping2")])
+        )
+      )
+  
+  # column annotation
+  col_annot <-
+    HeatmapAnnotation(
+      # annotations
+      nbcells=anno_barplot(
+        df_nbcells %>% filter(group %in% colnames(mtn_sub)) %>% arrange(match(group, colnames(mtn_sub))) %>% pull(n)
+        ),
+      grouping1=df_annotation[colnames(mtn_sub),"grouping1"],
+      grouping2=df_annotation[colnames(mtn_sub),"grouping2"],
+      # annotation labels
+      annotation_label=c(grouping_labels[1], grouping_labels[2], grouping_labels[3]),
+      # annotation colors
+      col=list(
+        grouping1=deframe(df_annotation[colnames(mtn_sub),c("grouping1", "col_grouping1")]),
+        grouping2=deframe(df_annotation[colnames(mtn_sub),c("grouping2", "col_grouping2")])
+        )
+      )
+  
+  # heatmap
+  Heatmap(
+    mtn_sub,
+    name="auroc",
+    # cluster
+    cluster_rows = heatmapclus,
+    cluster_columns = heatmapclus,
+    # annotations
+    top_annotation=col_annot,
+    left_annotation=row_annot,
+    # add values
+    layer_fun = function(j, i, x, y, width, height, fill) {
+          v = pindex(mtn_sub, i, j)
+          l = v > 0.9 | v < 0.1
+          grid.text(sprintf("%.2f", v[l]), x[l], y[l], gp = gpar(fontsize = 10))
+          }
+    )
+}
+```
+
+
+
+
+# ANALYSIS
+
+## Prepare data for metaneighbor
+```{r mtn-data-prep}
+seur_thym_tinn <- subset(
+  seur_integrated,
+  subset=tcell_lineage_tissue %in% c("GD_Thymus", "MAIT_Thymus", "iNKT_Thymus")
+  )
+
+se_thym <- SummarizedExperiment(
+  assays=seur_thym_tinn@assays[["RNA"]]@counts,
+  colData=seur_thym_tinn@meta.data[,c("tcell_lineage", "clusters_per_lineage")]
+  )
+```
+
+
+## Run metaneighbor
+```{r mtn-run}
+mtn <- MetaNeighborUS(
+  var_genes=VariableFeatures(seur_integrated),
+  dat=se_thym,
+  study_id=se_thym$tcell_lineage,
+  cell_type=se_thym$clusters_per_lineage,
+  fast_version=T
+  )
+```
+
+```{r plot_mtn_fullheatmap, fig.width=14, fig.height=14}
+library(gplots)
+heatmap.2(mtn,
+          # trace
+          trace="none",
+          # dendrogram
+          # Rowv=FALSE,
+          # Colv=FALSE,
+          # dendrogram="none",
+          # superimpose a density histogram on color key
+          density.info="none",
+          # color scale
+          col=rev(colorRampPalette(brewer.pal(11,"RdYlBu"))(100)),
+          breaks=seq(0,1,length=101),
+          key.xlab = "AUROC",
+          key.title="",
+          keysize = 1.2,
+          # text labels
+          main="",
+          cexRow=0.6,
+          cexCol=0.6,
+          # margins
+          margins=c(9,9)
+          )
+```
+
+## Plot metaneighbor full heatmap
+First, let's obtain the number of cells per group (we are not interested in groups that contain less than 100 cells, it's less reliable).
+```{r prepare_data_heatmaps_branches}
+# Get number of cells per lineage and cluster
+nbcells <- seur_thym_tinn@meta.data %>%
+  as_tibble() %>%
+  group_by(tcell_lineage, clusters_per_lineage) %>%
+  dplyr::count() %>%
+  ungroup() %>%
+  mutate(group=paste(tcell_lineage, clusters_per_lineage, sep="|")) %>%
+  # get percent of cells per lineage (e.g. %MAIT in MAIT_thymus_c0)
+  group_by(tcell_lineage) %>%
+  mutate(nbcells_per_lineage=sum(n)) %>%
+  ungroup() %>%
+  mutate(percentcells_per_lineage=n*100/nbcells_per_lineage) %>%
+  # clean up
+  select(-nbcells_per_lineage, -tcell_lineage, -clusters_per_lineage) %>%
+  relocate(group)
+groups_with_min_cells <- nbcells %>% filter(n>=100) %>% pull(group)
+
+# general dataframe for annotation
+df_annot <- data.frame("names"=nbcells$group) %>%
+  separate(names, c("tcell_lineage", "clusters_per_lineage"), sep="\\|", remove=F) %>%
+  # mutate(col_donor=case_when(
+  #   donor_id=="2" ~"#cccccc",
+  #   donor_id=="3" ~"#969696",
+  #   donor_id=="4" ~"#525252"
+  # )) %>%
+  left_join(
+    enframe(cols_lineages) %>% dplyr::rename(col_lineages=value),
+    by=join_by(tcell_lineage==name)
+    ) %>%
+  left_join(
+    enframe(c(cols_thym_nkt, cols_thym_mait, cols_thym_gdt)) %>% dplyr::rename(col_clusters_per_lineage=value),
+    by=join_by(clusters_per_lineage==name)
+  ) %>%
+  column_to_rownames("names") %>%
+  # rename columns for heatmap function
+  dplyr::rename(grouping2=clusters_per_lineage,
+                grouping1=tcell_lineage,
+                col_grouping2=col_clusters_per_lineage,
+                col_grouping1=col_lineages)
+
+```
+
+
+```{r heatmap_full, fig.width=12, fig.height=12}
+pdf("~/Projects/phd/data/presentation/figs_unfinished/mtn_btw_tinn_lineages.pdf", width=13, height=10)
+plot_mtn_heatmap(
+  mtn_matrix=mtn,
+  vector_groups_with_min_cells = groups_with_min_cells,
+  df_annotation = df_annot,
+  # df_nbcells=nbcells3,
+  df_nbcells=nbcells %>% select(-n) %>% dplyr::rename(n=percentcells_per_lineage),
+  grouping_labels=c("%cells", "lineage", "clusters"),
+  heatmapclus=T
+  )
+dev.off()
+```
+
+
+# PLOT GEP5 USAGE PER TINN LINEAGE
+
+## Import data
+```{r analysis-4}
+seur_thym <- list(
+  "nkt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_nkt_with_gene_signatures.rds"),
+  "mait"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_mait_with_gene_signatures.rds"),
+  "gdt"=readRDS("./data/seurat_objects/thymus_objects/seurat_thymus_gdt_with_gene_signatures.rds")
+)
+
+# sanity checks
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$nkt@meta.data),]) == rownames(seur_thym$nkt@meta.data), useNA="ifany"
+# )
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$mait@meta.data),]) == rownames(seur_thym$mait@meta.data), useNA="ifany"
+# )
+# table(rownames(seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(seur_thym$gdt@meta.data),]) == rownames(seur_thym$gdt@meta.data), useNA="ifany"
+# )
+
+# add column "clusters per lineage"
+seur_thym <- lapply(
+  seur_thym,
+  function(x){
+    x@meta.data$GEP5_usage <- seur_integrated@meta.data[rownames(seur_integrated@meta.data)%in%rownames(x@meta.data), "GEP5_usage"]
+    return(x)
+    }
+  )
+```
+
+
+```{r}
+plot_gepusage <- function(seurobj, gep){
+  p <- do_FeaturePlot(
+    seurobj,
+    features=paste0(gep,"_usage"),
+    order=T,
+    use_viridis=T,
+    viridis.palette = "D",
+    legend.position = "right"
+  )
+  p <- ggrastr::rasterise(p, layers="Point", dpi=300)+
+    theme(
+      panel.background = element_rect(fill='transparent'),
+      plot.background = element_rect(fill='transparent', color=NA),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      legend.background = element_rect(fill='transparent'),
+      legend.box.background = element_rect(fill='transparent')
+    )
+  return(p)
+}
+```
+
+
+## Plot
+```{r}
+plot_gepusage(seurobj=seur_thym$nkt, gep="GEP5")
+ggsave("./data/presentation/figs_unfinished/part2_gep5usage_nkt.pdf", width=7, height=5)
+
+plot_gepusage(seurobj=seur_thym$mait, gep="GEP5")
+ggsave("./data/presentation/figs_unfinished/part2_gep5usage_mait.pdf", width=7, height=5)
+
+plot_gepusage(seurobj=seur_thym$gdt, gep="GEP5")
+ggsave("./data/presentation/figs_unfinished/part2_gep5usage_gdt.pdf", width=7, height=5)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+

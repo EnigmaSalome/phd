@@ -339,16 +339,16 @@ print(seur_thym)
 # create a new metadata column for "branches"
 seur_thym@meta.data
 seur_thym@meta.data$tcell_lineage_split <- dplyr::case_when(
-  seur_thym@meta.data$tcell_lineage=="iNKT" & seur_thym@meta.data$clusters_integrated_data %in% 0:11  ~ "iNKT non-effector",
-  seur_thym@meta.data$tcell_lineage=="iNKT" & seur_thym@meta.data$clusters_integrated_data %in% 12:17 ~ "iNKT effector",
-  seur_thym@meta.data$tcell_lineage=="MAIT" & seur_thym@meta.data$clusters_integrated_data %in% 0:11  ~ "MAIT non-effector",
-  seur_thym@meta.data$tcell_lineage=="MAIT" & seur_thym@meta.data$clusters_integrated_data %in% 12:17 ~ "MAIT effector",
-  seur_thym@meta.data$tcell_lineage=="GD"   & seur_thym@meta.data$clusters_integrated_data %in% 0:11  ~ "GD non-effector",
-  seur_thym@meta.data$tcell_lineage=="GD"   & seur_thym@meta.data$clusters_integrated_data %in% 12:17 ~ "GD effector",
-  seur_thym@meta.data$tcell_lineage=="CD4" & seur_thym@meta.data$clusters_integrated_data %in% 0:11   ~ "CD4 non-effector",
-  seur_thym@meta.data$tcell_lineage=="CD4" & seur_thym@meta.data$clusters_integrated_data %in% 12:17  ~ "CD4 effector",
-  seur_thym@meta.data$tcell_lineage=="CD8" & seur_thym@meta.data$clusters_integrated_data %in% 0:11   ~ "CD8 non-effector",
-  seur_thym@meta.data$tcell_lineage=="CD8" & seur_thym@meta.data$clusters_integrated_data %in% 12:17  ~ "CD8 effector",
+  seur_thym@meta.data$tcell_lineage=="iNKT" & seur_thym@meta.data$clusters_integrated_data %in% 0:11  ~ "iNKT non-memory",
+  seur_thym@meta.data$tcell_lineage=="iNKT" & seur_thym@meta.data$clusters_integrated_data %in% 12:17 ~ "iNKT memory",
+  seur_thym@meta.data$tcell_lineage=="MAIT" & seur_thym@meta.data$clusters_integrated_data %in% 0:11  ~ "MAIT non-memory",
+  seur_thym@meta.data$tcell_lineage=="MAIT" & seur_thym@meta.data$clusters_integrated_data %in% 12:17 ~ "MAIT memory",
+  seur_thym@meta.data$tcell_lineage=="GD"   & seur_thym@meta.data$clusters_integrated_data %in% 0:11  ~ "GD non-memory",
+  seur_thym@meta.data$tcell_lineage=="GD"   & seur_thym@meta.data$clusters_integrated_data %in% 12:17 ~ "GD memory",
+  seur_thym@meta.data$tcell_lineage=="CD4" & seur_thym@meta.data$clusters_integrated_data %in% 0:11   ~ "CD4 non-memory",
+  seur_thym@meta.data$tcell_lineage=="CD4" & seur_thym@meta.data$clusters_integrated_data %in% 12:17  ~ "CD4 memory",
+  seur_thym@meta.data$tcell_lineage=="CD8" & seur_thym@meta.data$clusters_integrated_data %in% 0:11   ~ "CD8 non-memory",
+  seur_thym@meta.data$tcell_lineage=="CD8" & seur_thym@meta.data$clusters_integrated_data %in% 12:17  ~ "CD8 memory",
   .default = NA
 )
 table(seur_thym@meta.data[,c("clusters_integrated_data", "tcell_lineage_split")], useNA="ifany") # sanity check
@@ -409,7 +409,7 @@ nbcells3 <- seur_thym@meta.data %>%
   ungroup() %>%
   mutate(group=paste(donor_id, tcell_lineage_split, sep="|")) %>%
   # get percent of cells per lineage (e.g. %MAIT in MAIT_effector_donor1)
-  separate(tcell_lineage_split, c("tcell_lineage", "effectorB"), sep=" ", remove=F) %>%
+  separate(tcell_lineage_split, c("tcell_lineage", "memoryB"), sep=" ", remove=F) %>%
   select(-effectorB) %>%
   group_by(tcell_lineage) %>%
   mutate(nbcells_per_lineage=sum(n)) %>%
@@ -424,7 +424,7 @@ groups_with_min_cells3 <- nbcells3 %>% filter(n>=100) %>% pull(group)
 # general dataframe for annotation
 df_annot3 <- data.frame("names"=nbcells3$group) %>%
   separate(names, c("donor_id", "tcell_lineage_split"), sep="\\|", remove=F) %>%
-  separate(tcell_lineage_split, c("tcell_lineage", "effectorB"), sep=" ", remove=F) %>%
+  separate(tcell_lineage_split, c("tcell_lineage", "memoryB"), sep=" ", remove=F) %>%
   select(-effectorB) %>%
   mutate(col_donor=case_when(
     donor_id=="1" ~"#f7f7f7",
