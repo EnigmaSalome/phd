@@ -208,28 +208,6 @@ plot_DotPlot(
 # ggsave("./data/figures/chapter_03/figs_unfinished/section3/ch3_fig19_GEP5_dotplot_type3genes.pdf", width=6, height=4)
 ```
 
-## Analysis 1
-```{r analysis-1}
-
-```
-
-
-## Analysis 2
-```{r analysis-2}
-
-```
-
-## Analysis 3
-```{r analysis-3}
-
-```
-
-
-## Analysis 4
-```{r analysis-4}
-
-```
-
 
 
 
