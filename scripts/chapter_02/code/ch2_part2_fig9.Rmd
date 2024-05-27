@@ -362,6 +362,76 @@ gdt_p3 <- plot_DotPlot(seurobj = seur_thym$gdt, features=markergenes_gdt_list, s
 
 
 
+
+# DATA FOR SPATIAL TRANSCRIPTOMICS
+
+## Marker genes
+```{r}
+# Get marker genes
+list_marker_genes <- list(
+  "cd4"=markergenes_cd4,
+  "cd8"=markergenes_cd8,
+  "nkt"=markergenes_nkt,
+  "mait"=markergenes_mait,
+  "gdt"=markergenes_gdt
+)
+
+list_marker_genes <- lapply(list_marker_genes, function(x){
+  x %>%
+    mutate(clusters_per_lineage=as.character(cluster)) %>%
+    arrange(cluster) %>%
+    select(gene, clusters_per_lineage, avg_log2FC, p_val_adj) %>%
+    filter(p_val_adj<0.05) %>%
+    group_by(clusters_per_lineage) %>%
+    top_n(-20, p_val_adj) %>%
+    top_n(20, avg_log2FC) %>%
+    ungroup()
+})
+
+final_marker_genes_df <- bind_rows(list_marker_genes)
+
+# sanity checks
+# table(final_marker_genes_df$clusters_per_lineage, useNA="ifany")
+# max(final_marker_genes_df$p_val_adj)
+# max(final_marker_genes_df$avg_log2FC)
+# min(final_marker_genes_df$avg_log2FC)
+
+write.csv(final_marker_genes_df, "./data/spatial_transcriptomics/top20_marker_genes_per_thymocyte_lineage.csv")
+```
+
+
+## HVGs
+```{r}
+final_hvg_df <- data.frame(
+  "CD4"=VariableFeatures(seur_thym$cd4),
+  "CD8"=VariableFeatures(seur_thym$cd8),
+  "iNKT"=VariableFeatures(seur_thym$nkt),
+  "MAIT"=VariableFeatures(seur_thym$mait),
+  "GD"=VariableFeatures(seur_thym$gdt)
+) %>%
+  pivot_longer(cols=everything(), values_to = "gene", names_to = "tcell_lineage")
+
+table(final_hvg_df$tcell_lineage)
+length(unique(final_hvg_df$gene))
+# write.csv(final_hvg_df, "./data/spatial_transcriptomics/list_hvg_per_thymocyte_lineage.csv")
+```
+
+
+# Seurat object with only thymus
+```{r}
+seur_thymus <- subset(seur_integrated, subset=tissue=="Thymus")
+seur_thymus
+
+# saveRDS(seur_thymus, "./data/spatial_transcriptomics/seurat_human_thymus_24_04_04.rds")
+
+table(unique(seur_thymus$clusters_per_lineage) %in% unique(final_marker_genes_df$clusters_per_lineage))
+table(unique(seur_thymus$tcell_lineage) %in% unique(final_hvg_df$tcell_lineage))
+```
+
+
+
+
+
 # SESSION INFO
 ```{r}
 sessionInfo()
