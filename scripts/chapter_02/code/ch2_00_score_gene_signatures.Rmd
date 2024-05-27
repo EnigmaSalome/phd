@@ -108,16 +108,18 @@ chopp_signatures <- read.csv("~/Projects/phd/data/litterature_gene_signatures/ch
 chopp_gene_signatures_list <- as.list(chopp_signatures)
 names(chopp_gene_signatures_list) <- paste0("chopp_", names(chopp_gene_signatures_list))
 
-# Personally curated gene signatures from litterature (already scored in integrated seurat object)
-# perso_gene_signatures <- list(
-#   "effector"=c("HOPX", "GZMB", "NKG7", "TBX21", "PRF1", "GZMA", "KLRD1", "EOMES", "CCR6", "RORC", "JUNB", "FOS", "RORA", "FOSB"),
-#   "naive"   =c("SATB1", "TCF7", "LEF1", "CCR7", "SELL", "FOXP1", "KLF2", "SOX4", "ID3", "BACH2"),
-#   "egress"  =c("KLF2", "CORO1A", "CCR7", "CXCR4", "CXCR6", "FOXO1", "CXCR3", "S1PR1", "S1PR4", "S100A4", "S100A6", "EMP3") # from Sanchez Sanchez
-#   )
+# Personally curated gene signatures from literature (already scored in integrated seurat object)
+perso_gene_signatures <- list(
+  "effector"=c("HOPX", "GZMB", "NKG7", "TBX21", "PRF1", "GZMA", "KLRD1", "EOMES", "CCR6", "RORC", "JUNB", "FOS", "RORA", "FOSB"),
+  "naive"   =c("SATB1", "TCF7", "LEF1", "CCR7", "SELL", "FOXP1", "KLF2", "SOX4", "ID3", "BACH2"),
+  "egress"  =c("KLF2", "CORO1A", "CCR7", "CXCR4", "CXCR6", "FOXO1", "CXCR3", "S1PR1", "S1PR4", "S100A4", "S100A6", "EMP3"), # from Sanchez Sanchez
+  "type1"   =c("EOMES", "GZMK", "CCL5", "TBX21", "NKG7", "GZMA", "PRF1", "IFNG", "KLRD1", "KLRC1", "SLAMF7", "XCL1", "IL2RB"),
+  "type17"  =c("RORC", "RORA", "CCR6", "IL23R", "BLK", "SCART1", "IL1R1", "ITGAE", "SERPINB1", "IL7R", "IL17RE")
+  )
 
 
 # Combined gene lists
-gene_signatures_list <- c(park_gene_signatures_list, chopp_gene_signatures_list)
+gene_signatures_list <- c(park_gene_signatures_list, chopp_gene_signatures_list, perso_gene_signatures)
 gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x!=""]) # remove empty genes
 gene_signatures_list <- lapply(gene_signatures_list, function(x) x[x %in% rownames(seur_integrated)]) # remove genes not found in our data
 lapply(gene_signatures_list, function(x) length(x)) # sanity check (between 0-5 genes per signature lost)
@@ -131,7 +133,7 @@ seur_integrated <- AddModuleScore(
   name=names(gene_signatures_list),
   seed=1
   )
-colnames(seur_integrated@meta.data)[32:49] <- names(gene_signatures_list)
+colnames(seur_integrated@meta.data)[32:54] <- names(gene_signatures_list)
 
 # little sanity check
 # FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_naive", "naive"))
@@ -140,9 +142,13 @@ colnames(seur_integrated@meta.data)[32:49] <- names(gene_signatures_list)
 # FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_egress", "egress"))
 # FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("score_cd8aa", "park_CD8aa1"))
 # FeaturePlot(seur_integrated, reduction="umap_integrated", order=T, features=c("chopp_cd4_signature", "chopp_cd8_signature"), split.by="tissue")
+# ggplot(seur_integrated@meta.data,aes(x=score_naive, y=naive)) + geom_point()
+# ggplot(seur_integrated@meta.data,aes(x=score_effector, y=effector)) + geom_point()
+# ggplot(seur_integrated@meta.data,aes(x=score_egress, y=egress)) + geom_point()
 
 # add scores to all individual thymic seurat objects
-signatures_to_add <- c("score_naive", "score_effector", "score_egress", names(gene_signatures_list))
+# signatures_to_add <- c("score_naive", "score_effector", "score_egress", names(gene_signatures_list))
+signatures_to_add <- names(gene_signatures_list)
 seur_thym <- lapply(
   seur_thym,
   function(x){
@@ -163,29 +169,6 @@ saveRDS(seur_thym$nkt, "./data/seurat_objects/thymus_objects/seurat_thymus_nkt_w
 saveRDS(seur_thym$mait, "./data/seurat_objects/thymus_objects/seurat_thymus_mait_with_gene_signatures.rds")
 saveRDS(seur_thym$gdt, "./data/seurat_objects/thymus_objects/seurat_thymus_gdt_with_gene_signatures.rds")
 ```
-
-## Analysis 1
-```{r analysis-1}
-
-```
-
-
-## Analysis 2
-```{r analysis-2}
-
-```
-
-## Analysis 3
-```{r analysis-3}
-
-```
-
-
-## Analysis 4
-```{r analysis-4}
-
-```
-
 
 
 
