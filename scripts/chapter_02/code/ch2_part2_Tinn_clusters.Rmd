@@ -176,20 +176,20 @@ plot_DotPlot <- function(seurobj, group, features, scaling=T){
 
 ## DimPlot
 ```{r inkt-umap}
-lineage_dimplot(seurobj = seur_thym$nkt, col_vector = cols_thym_nkt, file_name = "ch2_fig10_inkt_umap.pdf")
+lineage_dimplot(seurobj = seur_thym$nkt, col_vector = cols_thym_nkt, file_name = "ch2_fig8_inkt_umap.pdf")
 
 # cluster comp per donor
-lineage_clustersperdonor(seurobj = seur_thym$nkt, col_vector = cols_thym_nkt, file_name = "ch2_fig10_inkt_clustersperdonor.pdf")
+lineage_clustersperdonor(seurobj = seur_thym$nkt, col_vector = cols_thym_nkt, file_name = "ch2_fig8_inkt_clustersperdonor.pdf")
 ```
 
 
 ## Gene signatures
 ```{r inkt-cd8aa, fig.height=5, fig.width=10}
-lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "park_CD8aa1", file_name = "ch2_fig10_inkt_cd8aa_sig.pdf")
-lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "park_abT_entry", file_name = "ch2_fig10_inkt_SPentry_sig.pdf")
-lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "naive", file_name = "ch2_fig10_inkt_naive.pdf")
-lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "effector", file_name = "ch2_fig10_inkt_effector.pdf")
-lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "egress", file_name = "ch2_fig10_inkt_egress.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "park_CD8aa1", file_name = "ch2_fig8_inkt_cd8aa_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "park_abT_entry", file_name = "ch2_fig8_inkt_SPentry_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "naive", file_name = "ch2_fig8_inkt_naive.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "effector", file_name = "ch2_fig8_inkt_effector.pdf")
+lineage_genesignature(seuratobj = seur_thym$nkt, genesignature = "egress", file_name = "ch2_fig8_inkt_egress.pdf")
 ```
 
 
@@ -205,7 +205,7 @@ inkt_genes_nebulosa <- c(
     "KLRB1", "NKG7"
     )
 
-lineage_nebulosagenes(seuratobj = seur_thym$nkt, genes_vector = inkt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig10_inkt_densityplots.pdf")
+lineage_nebulosagenes(seuratobj = seur_thym$nkt, genes_vector = inkt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig8_inkt_densityplots.pdf")
 ```
 
 
@@ -229,13 +229,14 @@ plot_DotPlot(
   group="clusters_per_lineage",
   features = inkt_genes_dotplot,
   scaling=T
-  # file_name = "ch2_fig10_inkt_dotplot2.pdf"
+  # file_name = "ch2_fig8_inkt_dotplot2.pdf"
 )
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig10_inkt_dotplot.pdf", width=4, height=8)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig8_inkt_dotplot.pdf", width=4, height=8)
 ```
 
+
 iNKT dotplot genes of interest for presentation:
-```{r}
+```{r inkt-dotplot-genes-thesis-defense}
 plot_DotPlot(
   seurobj = seur_thym_hu$nkt,
   group = "clusters_per_lineage",
@@ -303,14 +304,12 @@ ggplot(
   scale_color_manual(values=c(cols_thym_nkt, cols_thym_mait, cols_thym_gdt))+
   labs(x="Type 1 signature", y="Type 17 signature")+
   theme_cowplot()
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig10_inkt_type1_17_coexpression.pdf", width=6, height=4)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig8_inkt_type1_17_coexpression.pdf", width=6, height=4)
 ```
 
 
-
-
 ## test TCR shannon entropy
-```{r}
+```{r inkt-tcr-shannon-entropy, include=FALSE, eval=FALSE}
 tcr_df <- seur_thym$nkt@meta.data %>%
   
 
@@ -372,10 +371,11 @@ mean_shannon_thymus_C6 <- mean(replicate(100, shannon_iteration()))
 
 ## DimPlot
 ```{r mait-umap}
-lineage_dimplot(seurobj = seur_thym$mait, col_vector = cols_thym_mait, file_name = "ch2_fig10_mait_umap.pdf")
+lineage_dimplot(seurobj = seur_thym$mait, col_vector = cols_thym_mait, file_name = "ch2_fig11_mait_umap.pdf")
 
-lineage_clustersperdonor(seurobj = seur_thym$mait, col_vector = cols_thym_mait, file_name = "ch2_fig10_mait_clustersperdonor.pdf")
+lineage_clustersperdonor(seurobj = seur_thym$mait, col_vector = cols_thym_mait, file_name = "ch2_fig11_mait_clustersperdonor.pdf")
 ```
+
 
 ## DotPlot with marker genes
 ```{r mait-dotplot, fig.width=10, fig.height=7}
@@ -418,48 +418,69 @@ do_DotPlot(
     axis.text.x=element_text(size=8, angle=45, hjust=1, face="italic"),
     axis.text.y=element_text(size=8)
     )
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig10_mait_markergenes.pdf", width=10, height=5)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig11_mait_markergenes.pdf", width=10, height=5)
 ```
 
 
 ## Gene signatures
 ```{r mait-gene-signatures, fig.height=5, fig.width=10}
-lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "park_CD8aa1", file_name = "ch2_fig10_mait_cd8aa_sig.pdf")
-lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "park_abT_entry", file_name = "ch2_fig10_mait_SPentry_sig.pdf")
-lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "naive", file_name = "ch2_fig10_mait_naive.pdf")
-lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "effector", file_name = "ch2_fig10_mait_effector.pdf")
-lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "egress", file_name = "ch2_fig10_mait_egress.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "park_CD8aa1", file_name = "ch2_fig11_mait_cd8aa_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "park_abT_entry", file_name = "ch2_fig11_mait_SPentry_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "naive", file_name = "ch2_fig11_mait_naive.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "effector", file_name = "ch2_fig11_mait_effector.pdf")
+lineage_genesignature(seuratobj = seur_thym$mait, genesignature = "egress", file_name = "ch2_fig11_mait_egress.pdf")
 ```
 
 
 ## Nebulosa plot highlight CCR9 and CCR7
 ```{r mait-umap-densityplots, fig.height=10, fig.width=10}
-lineage_nebulosagenes(seuratobj = seur_thym$mait, genes_vector = inkt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig10_mait_densityplots.pdf")
+lineage_nebulosagenes(
+  seuratobj = seur_thym$mait,
+  genes_vector = inkt_genes_nebulosa,
+  pgrid_ncol = 2,
+  pgrid_size = c(10, 30),
+  file_name="no"
+  # file_name = "ch2_fig11_mait_densityplots.pdf"
+)
 ```
 
 
 ## MAIT DotPlot genes of interest
-```{r mait-dotplot-genes-relevant}
-# inkt_genes_dotplot <- c(
-#   "CD4", "CD8A", "CD8B", 
-#   "GNG4", "PDCD1", "TNFRSF9", # CD8aa
-#   "HIVEP3", "EGR2", "ZBTB16", # TFs induced in iNKT cells post-selection
-#   "CCR9", "LEF1", "ID3", # naive CCR9
-#   "CCR7", "SELL", "TCF7", # naive CCR7
-#   "S1PR1", "KLF2", # egress
-#   "FOS", "JUN", "JUNB", # AP1 signaling
-#   "TBX21", "EOMES", "IFNG", "GZMK", # type 1 effector
-#   "RORC", "RORA", "CCR6", "IL23R", # type 3 effector
-#   "KLRB1"
-# )
-
-lineage_dotplot(
-  seuratobj = seur_thym$mait,
-  genes_vector = c(inkt_genes_dotplot),
-  lines_coord = c(3.5, 6.5, 9.5, 15.5, 17.5, 20.5),
-  p_size = c(5, 7.5),
-  file_name = "ch2_fig10_mait_dotplot.pdf"
+```{r mait-dotplot-genes-relevant, fig.height=10, fig.width=4}
+mait_genes_dotplot <- c(
+  "CD27", "KLRB1", "IL18R1", # human stage markers (Koay et al. 2016)
+  "CD4", "CD8A", "CD8B", 
+  "GNG4", "PDCD1", "TNFRSF9", # CD8aa
+  "HIVEP3", "EGR2", "ZBTB16", # TFs induced in MAIT cells post-selection
+  "CCR9", "LEF1", "ID3", # naive CCR9
+  "CCR7", "SELL", "TCF7", # naive CCR7
+  "S1PR1", "KLF2", # egress
+  "FOS", "JUN", "JUNB", # AP1 signaling
+  "TBX21", "EOMES", "IFNG", "GZMK", "GZMB", # type 1 effector
+  "RORC", "RORA", "CCR6", "IL23R" # type 3 effector
 )
+
+plot_DotPlot(
+  seurobj = seur_thym$mait,
+  group="clusters_per_lineage",
+  features = mait_genes_dotplot,
+  scaling=T
+)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig11_mait_dotplot.pdf", width=4, height=8)
+```
+
+
+## Co-expression type 1 and 17 gene signatures
+```{r mait-type1-type17}
+ggplot(
+  df %>% filter(tcell_lineage=="MAIT"),
+  aes(x=type1, y=type17, color=clusters_per_lineage)
+)+
+  geom_point()+
+  scale_color_manual(values=c(cols_thym_nkt, cols_thym_mait, cols_thym_gdt))+
+  labs(x="Type 1 signature", y="Type 17 signature")+
+  theme_cowplot()
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig11_mait_type1_17_coexpression.pdf", width=6, height=4)
 ```
 
 
@@ -469,9 +490,9 @@ lineage_dotplot(
 
 ## DimPlot
 ```{r gdt-umap}
-lineage_dimplot(seurobj = seur_thym$gdt, col_vector = cols_thym_gdt, file_name = "ch2_fig10_gdt_umap.pdf")
+lineage_dimplot(seurobj = seur_thym$gdt, col_vector = cols_thym_gdt, file_name = "ch2_fig15_gdt_umap.pdf")
 
-lineage_clustersperdonor(seurobj = seur_thym$gdt, col_vector = cols_thym_gdt, file_name = "ch2_fig10_gdt_clustersperdonor.pdf", figwidth=5)
+lineage_clustersperdonor(seurobj = seur_thym$gdt, col_vector = cols_thym_gdt, file_name = "ch2_fig15_gdt_clustersperdonor.pdf", figwidth=5)
 ```
 
 ## DotPlot with marker genes
@@ -515,19 +536,19 @@ do_DotPlot(
     axis.text.x=element_text(size=8, angle=45, hjust=1, face="italic"),
     axis.text.y=element_text(size=8)
     )
-# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig10_gdt_markergenes.pdf", width=11, height=5)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig15_gdt_markergenes.pdf", width=11, height=5)
 ```
 
 
 ## Gene signatures
 ```{r gdt-gene-signatures, fig.height=5, fig.width=10}
-lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_gdT", file_name = "ch2_fig10_gdt_parkGD_sig.pdf")
-lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_CD8aa1", file_name = "ch2_fig10_gdt_cd8aa_sig.pdf")
-lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_CD8aa2", file_name = "ch2_fig10_gdt_cd8aa2_sig.pdf")
-# lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_abT_entry", file_name = "ch2_fig10_gdt_SPentry_sig.pdf")
-# lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "naive", file_name = "ch2_fig10_gdt_naive.pdf")
-lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "effector", file_name = "ch2_fig10_gdt_effector.pdf")
-lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "egress", file_name = "ch2_fig10_gdt_egress.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_gdT", file_name = "ch2_fig15_gdt_parkGD_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_CD8aa1", file_name = "ch2_fig15_gdt_cd8aa1_sig.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_CD8aa2", file_name = "ch2_fig15_gdt_cd8aa2_sig.pdf")
+# lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "park_abT_entry", file_name = "ch2_fig15_gdt_SPentry_sig.pdf")
+# lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "naive", file_name = "ch2_fig15_gdt_naive.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "effector", file_name = "ch2_fig15_gdt_effector.pdf")
+lineage_genesignature(seuratobj = seur_thym$gdt, genesignature = "egress", file_name = "ch2_fig15_gdt_egress.pdf")
 ```
 
 
@@ -543,7 +564,7 @@ gdt_genes_nebulosa <- c(
   "KLRB1"
 )
 
-lineage_nebulosagenes(seuratobj = seur_thym$gdt, genes_vector = gdt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig10_gdt_densityplots.pdf")
+lineage_nebulosagenes(seuratobj = seur_thym$gdt, genes_vector = gdt_genes_nebulosa, pgrid_ncol = 2, pgrid_size = c(10,30), file_name = "ch2_fig15_gdt_densityplots.pdf")
 ```
 
 
@@ -564,16 +585,28 @@ gdt_genes_dotplot <- c(
   "RORC", "RORA", "CCR6", "IL23R" # type 3 effector
 )
 
-lineage_dotplot(
-  seuratobj = seur_thym$gdt,
-  genes_vector = c(gdt_genes_dotplot),
-  lines_coord = c(4.5, 7.5, 10.5, 12.5, 14.5, 22.5, 28.5, 31.5, 34.5, 36.5),
-  p_size = c(5, 8.5),
-  file_name = "ch2_fig10_gdt_dotplot.pdf"
+plot_DotPlot(
+  seurobj = seur_thym$gdt,
+  group="clusters_per_lineage",
+  features = gdt_genes_dotplot,
+  scaling=T
 )
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig15_gdt_dotplot.pdf", width=4, height=8)
 ```
 
 
+## Co-expression type 1 and 17 gene signatures
+```{r gdt-type1-type17}
+ggplot(
+  df %>% filter(tcell_lineage=="GD"),
+  aes(x=type1, y=type17, color=clusters_per_lineage)
+)+
+  geom_point()+
+  scale_color_manual(values=c(cols_thym_nkt, cols_thym_mait, cols_thym_gdt))+
+  labs(x="Type 1 signature", y="Type 17 signature")+
+  theme_cowplot()
+ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig15_gdt_type1_17_coexpression.pdf", width=6, height=4)
+```
 
 
 
