@@ -348,9 +348,24 @@ plot_grid(
 ```
 
 
+## Dotplot genes of interest
+```{r}
+seur_cd4nkt_sub <- seur_integrated[,rownames(groups_df_cd4inkt)]
+plot_DotPlot(
+  seur_cd4nkt_sub,
+  group = "tcell_lineage",
+  features = rev(c("ZBTB16", "SLAMF6", "IL7R", "ZBTB7B", "CD40LG")),
+  scaling = F
+)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig17_dotplot_CD4vsiNKT.pdf", height = 3, width = 3)
+```
+
+
 
 
 # 4. DE naive CD8 vs MAIT
+
+## DE analysis
 ```{r cd8-mait-deseq}
 # CD8 & MAIT metadata
 groups_df_cd8mait <- seur_integrated@meta.data[,c("tissue", "tcell_lineage", "donor_id", "clusters_integrated_data")] %>%
@@ -398,6 +413,7 @@ p_cd8MAIT
 # dev.off()
 ```
 
+## CD8 & MAIT umaps
 ```{r cd8-mait-umaps, fig.width=8}
 plot_grid(
   # CD8
@@ -437,6 +453,50 @@ plot_grid(
     ),
   ncol=2)
 # ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig17_umaps_highlights_c9c10_CD8vsMAIT.pdf", height = 3, width = 5)
+```
+
+
+```{r}
+plot_DotPlot <- function(seurobj, group, features, scaling=T){
+  # get plot data
+  p <- Seurat::DotPlot(
+    seurobj,
+    group.by=group,
+    features=features,
+    scale=scaling
+  )
+  # plot in personalized way
+  p <- ggplot(p$data, aes(x=id, y=features.plot, fill=avg.exp.scaled, size=pct.exp))+
+    geom_point(color="black", shape=21)+
+    # scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\nnormalized\navg expression")+
+    scale_size_continuous(range=c(0,10), limits=c(0,100), name="%cells\nexpressing\ngene")+
+    theme_bw()+
+    theme(
+      axis.text.y=element_text(face="italic"),
+      axis.text.x=element_text(angle=45, hjust=1)
+      )+
+    labs(y="", x="")
+  # different color scale if scaled or not
+  if(scaling==T){
+    p <- p + scale_fill_gradient2(low=scales::muted("blue"), high=scales::muted("red"), name="z-score\naverage\nnormalized\nexpression")
+  } else{
+    p <- p + viridis::scale_fill_viridis(option="B", direction=-1, name="average\nnormalized\nexpression")
+  }
+  return(p)
+}
+```
+
+
+## Dotplot genes of interest
+```{r}
+seur_cd8mait_sub <- seur_integrated[,rownames(groups_df_cd8mait)]
+plot_DotPlot(
+  seur_cd8mait_sub,
+  group = "tcell_lineage",
+  features = rev(c("ZBTB16", "SH2D1A", "RUNX3", "LINC02446")),
+  scaling = F
+)
+# ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig17_dotplot_CD8vsMAIT.pdf", height = 3, width = 3)
 ```
 
 
