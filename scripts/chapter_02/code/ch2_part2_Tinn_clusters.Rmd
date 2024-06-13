@@ -646,7 +646,7 @@ seur_thymus@meta.data$clusters_per_lineage_tinn <- factor(
 
 
 plot_DotPlot(seurobj=seur_thymus, group="clusters_per_lineage_tinn", features=poster_genes_dotplot, scaling=F)
-ggsave("~/Desktop/Meyer-lab/Conferences/2024-07_ANDCS_Paris/poster_fig2_dotplot.pdf", width=20, height=8, units="cm")
+# ggsave("~/Desktop/Meyer-lab/Conferences/2024-07_ANDCS_Paris/poster_fig2_dotplot.pdf", width=20, height=8, units="cm")
 ```
 
 
