@@ -611,6 +611,47 @@ ggsave("~/Projects/phd/data/figures/chapter_02/figs_unfinished/section2/ch2_fig1
 
 
 
+# POSTER ANDCS PLOTS
+
+## Dotplot
+```{r}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+seur_thymus <- subset(seur_integrated, subset=tissue=="Thymus")
+
+# list of genes to plot
+poster_genes_dotplot <- c(
+  "TBX21", "EOMES", "GZMK", "PRF1", # type 1 effector
+  "RORC", "RORA", "CCR6", "IL23R" # type 3 effector
+)
+
+# group CD4 and CD8 as one
+seur_thymus@meta.data$clusters_per_lineage_tinn <- ifelse(
+  test=seur_thymus@meta.data$tcell_lineage %in% c("CD4", "CD8"),
+  yes=seur_thymus@meta.data$tcell_lineage,
+  no=seur_thymus@meta.data$clusters_per_lineage
+)
+# table(seur_thymus@meta.data[,c("clusters_per_lineage", "clusters_per_lineage_tinn")], useNA="ifany")
+
+# reorder
+seur_thymus@meta.data$clusters_per_lineage_tinn <- factor(
+  seur_thymus@meta.data$clusters_per_lineage_tinn,
+  levels=c(
+    paste0("iNKT_thymus_c", 0:6),
+    paste0("MAIT_thymus_c", 0:6),
+    paste0("GDT_thymus_c", 0:7),
+    "CD4",
+    "CD8"
+  )
+  )
+
+
+plot_DotPlot(seurobj=seur_thymus, group="clusters_per_lineage_tinn", features=poster_genes_dotplot, scaling=F)
+ggsave("~/Desktop/Meyer-lab/Conferences/2024-07_ANDCS_Paris/poster_fig2_dotplot.pdf", width=20, height=8, units="cm")
+```
+
+
+
+
 
 # SESSION INFO
 ```{r}
