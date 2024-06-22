@@ -146,21 +146,21 @@ featureplot <- function(seurobj, feature, col_viridis="E", ordercells=T, file_na
 
 plotccr9ccr7 <- function(seurobj, genes=c("CCR9", "CCR7", "S1PR1"), file_name="no"){
   if(file_name=="no"){
-    do_NebulosaPlot(seurobj, features=genes)
+    do_NebulosaPlot(seurobj, features=genes, sequential.palette="YlOrRd")
   }
   else{
     p <- ggrastr::rasterize(
-      do_NebulosaPlot(seurobj, features=genes[1]),
+      do_NebulosaPlot(seurobj, features=genes[1], sequential.palette="YlOrRd"),
       layers="Point",
       dpi=300
     ) |
       ggrastr::rasterize(
-        do_NebulosaPlot(seurobj, features=genes[2]),
+        do_NebulosaPlot(seurobj, features=genes[2], sequential.palette="YlOrRd"),
         layers="Point",
         dpi=300
       ) |
       ggrastr::rasterize(
-        do_NebulosaPlot(seurobj, features=genes[3]),
+        do_NebulosaPlot(seurobj, features=genes[3], sequential.palette="YlOrRd"),
         layers="Point",
         dpi=300
       )
@@ -231,7 +231,7 @@ DotPlot(seur_thym_hu$gdt, group.by="clusters_per_lineage", features=c("CCR9", "C
 # to save
 # plotccr9ccr7(seur_thym_hu$cd4, file_name = "fig21_umap_hu_cd4_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$cd8, file_name = "fig21_umap_hu_cd8_ccr9ccr7.pdf")
-# plotccr9ccr7(seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")], file_name = "fig21_umap_hu_cd4cd8_ccr9ccr7.pdf")
+plotccr9ccr7(seur_integrated[,seur_integrated@meta.data$tcell_lineage_tissue %in% c("CD4_Thymus", "CD8_Thymus")], file_name = "fig21_umap_hu_cd4cd8_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$nkt, file_name = "fig21_umap_hu_nkt_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$mait, file_name = "fig21_umap_hu_mait_ccr9ccr7.pdf")
 # plotccr9ccr7(seur_thym_hu$gdt, file_name = "fig21_umap_hu_gdt_ccr9ccr7.pdf")
@@ -249,20 +249,20 @@ DotPlot(sanchez_gdt, features=c("CCR9", "CCR7", "S1PR1", "KLF2")) # also KLF2 ex
 
 ## Mouse
 ```{r ccr9-ccr7-mouse, fig.height=6, fig.width=14}
-plotccr9ccr7(seur_thym_ms$tconv)
+plotccr9ccr7(seur_thym_ms$tconv, genes=c("Ccr9", "Ccr7", "S1pr1"))
 DotPlot(seur_thym_ms$tconv, features=c("Ccr9", "Ccr7", "S1pr1")) # sanity check
-plotccr9ccr7(seur_thym_ms$nkt)
+plotccr9ccr7(seur_thym_ms$nkt, genes = c("Ccr9", "Ccr7", "S1pr1"))
 DotPlot(seur_thym_ms$nkt, features=c("Ccr9", "Ccr7", "S1pr1")) # sanity check
-plotccr9ccr7(seur_thym_ms$mait)
+plotccr9ccr7(seur_thym_ms$mait, genes=c("Ccr9", "Ccr7", "S1pr1"))
 DotPlot(seur_thym_ms$mait, features=c("Ccr9", "Ccr7", "S1pr1"))
-plotccr9ccr7(seur_thym_ms$gdt)
+plotccr9ccr7(seur_thym_ms$gdt, genes=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"))
 DotPlot(seur_thym_ms$gdt, features=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"), group.by="gd_clusters") # sanity check
 
 # to save
-# plotccr9ccr7(seur_thym_ms$tconv, genes=c("Ccr9", "Ccr7", "S1pr1"), file_name = "fig21_umap_ms_cd4cd8_ccr9ccr7.pdf")
-# plotccr9ccr7(seur_thym_ms$nkt, genes=c("Ccr9", "Ccr7", "S1pr1"),   file_name = "fig21_umap_ms_nkt_ccr9ccr7.pdf")
-# plotccr9ccr7(seur_thym_ms$mait, genes=c("Ccr9", "Ccr7", "S1pr1"),  file_name = "fig21_umap_ms_mait_ccr9ccr7.pdf")
-# plotccr9ccr7(seur_thym_ms$gdt, genes=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"),   file_name = "fig21_umap_ms_gdt_ccr9ccr7.pdf")
+plotccr9ccr7(seur_thym_ms$tconv, genes=c("Ccr9", "Ccr7", "S1pr1"), file_name = "fig21_umap_ms_cd4cd8_ccr9ccr7.pdf")
+plotccr9ccr7(seur_thym_ms$nkt, genes=c("Ccr9", "Ccr7", "S1pr1"),   file_name = "fig21_umap_ms_nkt_ccr9ccr7.pdf")
+plotccr9ccr7(seur_thym_ms$mait, genes=c("Ccr9", "Ccr7", "S1pr1"),  file_name = "fig21_umap_ms_mait_ccr9ccr7.pdf")
+plotccr9ccr7(seur_thym_ms$gdt, genes=c("ENSMUSG00000029530", "ENSMUSG00000037944", "ENSMUSG00000045092"),   file_name = "fig21_umap_ms_gdt_ccr9ccr7.pdf")
 ```
 
 
