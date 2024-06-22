@@ -1,0 +1,232 @@
+---
+title: "Chapter 2 - Materials and methods"
+author: "Salomé Carcy"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+
+---
+
+This notebook is for the figure that shows the data before and after integration
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5, fig.height = 5,
+                      warning=FALSE, message=FALSE,
+                      root.dir = "~/Projects/phd/")
+```
+
+
+# IMPORT
+
+## Import librairies
+```{r import-librairies}
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(tidyverse)
+library(dplyr)
+library(Seurat)
+library(SCpubr)
+library(patchwork)
+
+source("~/Projects/phd/scripts/colors_universal.R")
+```
+
+## Import data
+```{r import-data}
+seur_integrated <- readRDS("./data/seurat_objects/seurat_human_integrated_object_23_12_01.rds")
+```
+
+
+
+
+# FUNCTIONS
+```{r define-functions}
+plot_raster <- function(p, file_name="no"){
+  p <- ggrastr::rasterise(
+    p,
+    layers = "Point",
+    dpi = 300
+  )
+  
+  if(file_name != "no"){
+    filename_prefix <- "~/Projects/phd/data/figures/chapter_02/figs_unfinished/methods/"
+    ggsave(filename=paste0(filename_prefix, file_name), plot=p, width=6, height=5)
+  }
+  
+  return(p)
+}
+```
+
+
+
+
+# ANALYSIS
+
+## Sequencing method
+```{r seq-method}
+# pre-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="initial_umap",
+      group.by = "sequencing_method",
+      colors.use = c("WTA"="#737373", "WTA_VDJ"="#d9d9d9"),
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_seqmethod_pre.pdf"
+)
+
+# post-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="umap_integrated",
+      group.by = "sequencing_method",
+      colors.use = c("WTA"="#737373", "WTA_VDJ"="#d9d9d9"),
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_seqmethod_post.pdf"
+)
+```
+
+
+## Donors
+```{r donors, fig.width=5, fig.height=5}
+cols_donors <- colorRampPalette(brewer.pal(8, "Set2"))(length(unique(seur_integrated$donor_id)))
+names(cols_donors) <- unique(seur_integrated$donor_id)
+
+# pre-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="initial_umap",
+      group.by = "donor_id",
+      colors.use = cols_donors,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_donors_pre.pdf"
+)
+
+# post-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="umap_integrated",
+      group.by = "donor_id",
+      colors.use = cols_donors,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_donors_post.pdf"
+)
+```
+
+
+## Sequencing batch
+```{r analysis-1}
+cols_batch <- colorRampPalette(brewer.pal(8, "Set3"))(length(unique(seur_integrated$batch_id)))
+names(cols_batch) <- unique(seur_integrated$batch_id)
+
+# pre-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="initial_umap",
+      group.by = "batch_id",
+      colors.use = cols_batch,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_batch_pre.pdf"
+)
+
+# post-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="umap_integrated",
+      group.by = "batch_id",
+      colors.use = cols_batch,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_batch_post.pdf"
+)
+```
+
+
+## Clusters
+```{r clusters-integrated}
+# pre-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="initial_umap",
+      group.by = "clusters_integrated_data",
+      colors.use = cols_integrated,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_clusters_pre.pdf"
+)
+
+# post-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="umap_integrated",
+      group.by = "clusters_integrated_data",
+      colors.use = cols_integrated,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_clusters_post.pdf"
+)
+```
+
+
+## Tissue
+```{r analysis-3}
+# pre-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="initial_umap",
+      group.by = "tissue",
+      colors.use = cols_tissue,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_tissue_pre.pdf"
+)
+
+# post-integration
+plot_raster(
+  do_DimPlot(
+      seur_integrated,
+      reduction="umap_integrated",
+      group.by = "tissue",
+      colors.use = cols_tissue,
+      legend.position = "right"
+    ),
+  # file_name="no"
+  file_name="methods_umap_tissue_post.pdf"
+)
+```
+
+
+
+
+# SESSION INFO
+```{r}
+sessionInfo()
+```
+
+
